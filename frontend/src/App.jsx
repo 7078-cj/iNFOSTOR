@@ -20,10 +20,11 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/game" element={<GameBoard />} />
+            
               
             <Route element={<PrivateRoutes />} >
               <Route path="/" element={<DashBoard />} />
+              <Route path="/game/:lobbyId" element={<GameBoard />} />
             </Route>
               
           </Routes>
