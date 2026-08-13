@@ -855,6 +855,21 @@ class GameEnvironment:
             "phone-hotline",
             "courtyard-bulletin",
             "street-tv",
+            "daily-herald-plaza",
+            "morning-post-courtyard",
+            "tabloid-stand-media",
+            "news-vendor-records",
+            "campus-paper-library",
+            "evening-edition-broadcast",
+            "street-news-citizen",
+            "plaza-news-kiosk",
+            "community-weekly-hall",
+            "filing-cabinet-records",
+            "memo-board-broadcast",
+            "plaza-memo-board",
+            "courtyard-radio-booth",
+            "records-micro-terminal",
+            "broadcast-archive-tv",
         }
 
         if object_id not in valid_objects:

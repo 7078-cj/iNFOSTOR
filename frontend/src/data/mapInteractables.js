@@ -2,6 +2,8 @@
  * All investigation sources on the map — spread across themed rooms.
  */
 
+import { NPC_LABELS } from "./npcs";
+
 export const INVESTIGATION_OBJECTS = [
     // Public Library
     { id: "library", x: 620, y: 640, w: 40, h: 40 },
@@ -47,6 +49,25 @@ export const INVESTIGATION_OBJECTS = [
     // Courtyard (south center)
     { id: "courtyard-bulletin", x: 1180, y: 1320, w: 40, h: 34 },
     { id: "street-tv", x: 1320, y: 1380, w: 44, h: 32 },
+
+    // Newspapers — spread across the map
+    { id: "daily-herald-plaza", x: 960, y: 760, w: 36, h: 38 },
+    { id: "morning-post-courtyard", x: 1140, y: 1450, w: 36, h: 38 },
+    { id: "tabloid-stand-media", x: 1420, y: 920, w: 34, h: 36 },
+    { id: "news-vendor-records", x: 360, y: 140, w: 34, h: 36 },
+    { id: "campus-paper-library", x: 540, y: 580, w: 34, h: 36 },
+    { id: "evening-edition-broadcast", x: 2180, y: 280, w: 36, h: 38 },
+    { id: "street-news-citizen", x: 1760, y: 1340, w: 34, h: 36 },
+    { id: "plaza-news-kiosk", x: 1280, y: 540, w: 36, h: 40 },
+    { id: "community-weekly-hall", x: 540, y: 1360, w: 34, h: 36 },
+
+    // Extra sources in sparse areas
+    { id: "filing-cabinet-records", x: 240, y: 240, w: 36, h: 38 },
+    { id: "memo-board-broadcast", x: 2000, y: 300, w: 40, h: 34 },
+    { id: "plaza-memo-board", x: 1360, y: 720, w: 40, h: 34 },
+    { id: "courtyard-radio-booth", x: 1460, y: 1320, w: 34, h: 30 },
+    { id: "records-micro-terminal", x: 120, y: 260, w: 36, h: 32 },
+    { id: "broadcast-archive-tv", x: 2280, y: 140, w: 44, h: 32 },
 ];
 
 export const CONTENT_TYPE_MAP = {
@@ -72,6 +93,21 @@ export const CONTENT_TYPE_MAP = {
     "phone-hotline": "radio",
     "courtyard-bulletin": "bulletin",
     "street-tv": "tv",
+    "daily-herald-plaza": "bulletin",
+    "morning-post-courtyard": "bulletin",
+    "tabloid-stand-media": "bulletin",
+    "news-vendor-records": "bulletin",
+    "campus-paper-library": "bulletin",
+    "evening-edition-broadcast": "bulletin",
+    "street-news-citizen": "bulletin",
+    "plaza-news-kiosk": "computer",
+    "community-weekly-hall": "bulletin",
+    "filing-cabinet-records": "library",
+    "memo-board-broadcast": "bulletin",
+    "plaza-memo-board": "bulletin",
+    "courtyard-radio-booth": "radio",
+    "records-micro-terminal": "computer",
+    "broadcast-archive-tv": "tv",
 };
 
 export const OBJECT_LABELS = {
@@ -102,6 +138,27 @@ export const OBJECT_LABELS = {
     "phone-hotline": "Public Hotline Phone",
     "courtyard-bulletin": "Courtyard Noticeboard",
     "street-tv": "Street-Level News Screen",
+    "daily-herald-plaza": "Daily Herald — Plaza Stand",
+    "morning-post-courtyard": "Morning Post — Courtyard",
+    "tabloid-stand-media": "Flash Tabloid Stand",
+    "news-vendor-records": "Records Office News Vendor",
+    "campus-paper-library": "Campus Chronicle Rack",
+    "evening-edition-broadcast": "Evening Edition Stand",
+    "street-news-citizen": "Citizen Street News",
+    "plaza-news-kiosk": "Plaza News Kiosk",
+    "community-weekly-hall": "Community Weekly Rack",
+    "filing-cabinet-records": "Municipal Filing Cabinet",
+    "memo-board-broadcast": "Broadcast Memo Board",
+    "plaza-memo-board": "Plaza Community Board",
+    "courtyard-radio-booth": "Courtyard Radio Booth",
+    "records-micro-terminal": "Records Lookup Terminal",
+    "broadcast-archive-tv": "Broadcast Archive Monitor",
+};
+
+/** Labels for evidence from objects and NPC testimony. */
+export const SOURCE_LABELS = {
+    ...OBJECT_LABELS,
+    ...NPC_LABELS,
 };
 
 export const INTERIOR_WALLS = [

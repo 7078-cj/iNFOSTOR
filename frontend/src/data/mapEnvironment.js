@@ -14,6 +14,7 @@ export const ROOMS = [
     { id: "community-hall", label: "Community Hall", x: 480, y: 1300, w: 480, h: 260, floor: "from-emerald-950/30 to-slate-900/20", accent: "rgba(52,211,153,0.07)", labelColor: "text-emerald-400/60" },
     { id: "courtyard", label: "South Courtyard", x: 1060, y: 1260, w: 480, h: 300, floor: "from-slate-800/30 to-slate-900/15", accent: "rgba(148,163,184,0.06)", labelColor: "text-slate-500" },
     { id: "citizen-services", label: "Citizen Services", x: 1660, y: 1260, w: 680, h: 300, floor: "from-blue-950/35 to-slate-900/20", accent: "rgba(59,130,246,0.08)", labelColor: "text-blue-400/70" },
+    { id: "plaza-cafe", label: "News Café", x: 1020, y: 560, w: 220, h: 140, floor: "from-purple-950/35 to-slate-900/15", accent: "rgba(192,132,252,0.08)", labelColor: "text-purple-400/70" },
 ];
 
 export const DECORATIONS = [
@@ -63,6 +64,27 @@ export const DECORATIONS = [
     { type: "sign-post", x: 1420, y: 820, label: "← Evidence" },
     { type: "sign-post", x: 240, y: 400, label: "Records ↑" },
     { type: "sign-post", x: 2140, y: 400, label: "Broadcast ↑" },
+    { type: "cafe-counter", x: 1040, y: 580, w: 160, h: 36 },
+    { type: "cafe-table", x: 1120, y: 640, w: 48, h: 32 },
+    { type: "cafe-table", x: 1180, y: 660, w: 48, h: 32 },
+    { type: "fountain", x: 1200, y: 1420 },
+    { type: "newspaper-stand", x: 940, y: 740 },
+    { type: "newspaper-stand", x: 1120, y: 1430 },
+    { type: "newspaper-stand", x: 1740, y: 1320 },
+    { type: "filing-cabinet", x: 220, y: 220, w: 40, h: 50 },
+    { type: "filing-cabinet", x: 260, y: 220, w: 40, h: 50 },
+    { type: "antenna", x: 2240, y: 100 },
+    { type: "bench", x: 1160, y: 1480, w: 100, h: 28 },
+    { type: "bench", x: 1280, y: 1480, w: 100, h: 28 },
+    { type: "rug", x: 1020, y: 560, w: 200, h: 120, color: "rgba(126,34,206,0.08)" },
+    { type: "desk", x: 1940, y: 160, w: 70, h: 36 },
+    { type: "desk", x: 2060, y: 200, w: 70, h: 36 },
+    { type: "lamp", x: 340, y: 160 },
+    { type: "lamp", x: 2180, y: 1320 },
+    { type: "plant", x: 1000, y: 560 },
+    { type: "plant", x: 1220, y: 580 },
+    { type: "sign-post", x: 1060, y: 1280, label: "Courtyard ↓" },
+    { type: "sign-post", x: 1720, y: 1280, label: "Services →" },
 ];
 
 export const FLOOR_TILE = 48;

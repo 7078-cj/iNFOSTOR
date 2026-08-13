@@ -164,15 +164,59 @@ export function NewsDeskSprite({ active = false }) {
     );
 }
 
+export function NewspaperSprite({ active = false }) {
+    return (
+        <div className="relative h-full w-full">
+            <div className="absolute bottom-0 left-1/2 h-[15%] w-[80%] -translate-x-1/2 rounded-sm bg-neutral-700" />
+            <div
+                className={`absolute inset-x-0 top-0 h-[82%] rounded-sm border border-neutral-600 bg-neutral-800 ${
+                    active ? "shadow-[0_0_10px_rgba(251,191,36,0.35)]" : ""
+                }`}
+            >
+                {[0, 1, 2].map((i) => (
+                    <div
+                        key={i}
+                        className="absolute rounded-sm border border-amber-100/20 bg-amber-50"
+                        style={{
+                            left: `${12 + i * 28}%`,
+                            top: "15%",
+                            width: "22%",
+                            height: "70%",
+                            transform: `rotate(${-4 + i * 4}deg)`,
+                        }}
+                    >
+                        <div className="mx-0.5 mt-0.5 h-0.5 w-[80%] bg-neutral-400" />
+                        <div className="mx-0.5 mt-0.5 h-0.5 w-[60%] bg-neutral-300" />
+                    </div>
+                ))}
+                <div className="absolute bottom-0.5 left-1 right-1 text-center text-[5px] font-bold uppercase tracking-wider text-amber-200/70">
+                    News
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export function getSpriteForObject(objectId, active = false) {
     const tvIds = ["tv", "community-tv", "press-monitor", "live-feed-monitor", "street-tv"];
-    const libraryIds = ["library", "archive-shelf", "microfilm", "official-records"];
-    const computerIds = ["computer", "archive-computer", "fact-check-kiosk", "social-terminal", "service-kiosk"];
+    const libraryIds = ["library", "archive-shelf", "microfilm", "official-records", "filing-cabinet-records"];
+    const computerIds = ["computer", "archive-computer", "fact-check-kiosk", "social-terminal", "service-kiosk", "plaza-news-kiosk"];
     const radioIds = ["radio", "second-radio", "whisper-booth", "satellite-radio", "phone-hotline"];
-    const bulletinIds = ["bulletin", "newspaper-rack", "rumor-board", "records-desk", "gossip-pinboard", "town-hall-board", "courtyard-bulletin"];
+    const bulletinIds = ["bulletin", "newspaper-rack", "rumor-board", "records-desk", "gossip-pinboard", "town-hall-board", "courtyard-bulletin", "memo-board-broadcast"];
+    const newspaperIds = [
+        "daily-herald-plaza",
+        "morning-post-courtyard",
+        "tabloid-stand-media",
+        "news-vendor-records",
+        "campus-paper-library",
+        "evening-edition-broadcast",
+        "street-news-citizen",
+        "community-weekly-hall",
+    ];
 
     if (tvIds.includes(objectId)) return <TVSprite active={active} />;
     if (objectId === "newsdesk") return <NewsDeskSprite active={active} />;
+    if (newspaperIds.includes(objectId)) return <NewspaperSprite active={active} />;
     if (libraryIds.includes(objectId)) return <LibrarySprite active={active} />;
     if (computerIds.includes(objectId)) return <ComputerSprite active={active} />;
     if (radioIds.includes(objectId)) return <RadioSprite active={active} />;

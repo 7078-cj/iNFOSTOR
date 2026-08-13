@@ -24,6 +24,8 @@ import ImposterPanel, {
 } from "../components/ImposterPanel";
 import FabricateEvidenceModal from "../components/FabricateEvidenceModal";
 import Minimap from "../components/Minimap";
+import Npc from "../components/Npc";
+import NpcDialogueModal from "../components/NpcDialogueModal";
 
 import {
     getVisionConfig,
@@ -39,6 +41,7 @@ import {
     INVESTIGATION_OBJECTS,
     INTERIOR_WALLS,
 } from "../data/mapInteractables";
+import { NPCS } from "../data/npcs";
 import { WORLD_W, WORLD_H } from "../data/mapEnvironment";
 
 const WALL_THICKNESS = 20;
@@ -206,6 +209,8 @@ export default function GameBoard() {
         null
     );
 
+    const [activeNpcId, setActiveNpcId] = useState(null);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -330,7 +335,17 @@ export default function GameBoard() {
     );
 
     const handleObjectInteract = useCallback((objectId) => {
+        setActiveNpcId(null);
         setActiveObjectId(objectId);
+    }, []);
+
+    const handleNpcTalk = useCallback((npcId) => {
+        setActiveObjectId(null);
+        setActiveNpcId(npcId);
+    }, []);
+
+    const handleCloseNpcModal = useCallback(() => {
+        setActiveNpcId(null);
     }, []);
 
     const isImposter = gameState.role === "Imposter";
@@ -1104,6 +1119,33 @@ export default function GameBoard() {
 
 
                     {/* ----------------------------------------------------- */}
+                    {/* NPCs — ask about the news */}
+                    {/* ----------------------------------------------------- */}
+
+                    {NPCS.map((npc) => {
+                        const centerX = npc.x + 13;
+                        const centerY = npc.y + 15;
+                        const visible = isWorldPointVisible(
+                            centerX,
+                            centerY
+                        );
+
+                        if (!visible) {
+                            return null;
+                        }
+
+                        return (
+                            <Npc
+                                key={npc.id}
+                                npc={npc}
+                                player={playerRect}
+                                onTalk={handleNpcTalk}
+                            />
+                        );
+                    })}
+
+
+                    {/* ----------------------------------------------------- */}
                     {/* Local Player */}
                     {/* ----------------------------------------------------- */}
 
@@ -1147,6 +1189,14 @@ export default function GameBoard() {
                 challenge={activeChallenge}
                 playerRole={gameState.role}
                 onClose={handleCloseModal}
+                onSubmitEvidence={handleSubmitEvidence}
+            />
+
+            <NpcDialogueModal
+                npcId={activeNpcId}
+                announcement={gameState.announcement}
+                playerRole={gameState.role}
+                onClose={handleCloseNpcModal}
                 onSubmitEvidence={handleSubmitEvidence}
             />
 

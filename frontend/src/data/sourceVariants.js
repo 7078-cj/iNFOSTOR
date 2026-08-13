@@ -3,6 +3,8 @@
  * Some help investigators; others mislead.
  */
 
+import { getNewspaperContent } from "./newspaperVariants";
+
 const sourceVariants = {
     1: {
         "archive-shelf": {
@@ -320,6 +322,10 @@ export default sourceVariants;
 
 export function getSourceContent(announcementId, objectId, baseContent, typeMap) {
     const variants = sourceVariants[announcementId] || {};
+    const newspaper = getNewspaperContent(announcementId, objectId);
+    if (newspaper) {
+        return newspaper;
+    }
     const baseKey = typeMap[objectId] || objectId;
     return variants[objectId] || baseContent[objectId] || baseContent[baseKey] || null;
 }

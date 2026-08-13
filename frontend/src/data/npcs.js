@@ -1,0 +1,118 @@
+/**
+ * NPC definitions placed across the map.
+ */
+
+export const NPCS = [
+    {
+        id: "npc-maria",
+        name: "Maria",
+        title: "Head Librarian",
+        x: 740,
+        y: 680,
+        color: "#fbbf24",
+        accent: "#92400e",
+    },
+    {
+        id: "npc-jun",
+        name: "Jun",
+        title: "Local Reporter",
+        x: 660,
+        y: 1020,
+        color: "#f87171",
+        accent: "#991b1b",
+    },
+    {
+        id: "npc-rosa",
+        name: "Aling Rosa",
+        title: "Market Vendor",
+        x: 1020,
+        y: 880,
+        color: "#fb923c",
+        accent: "#c2410c",
+    },
+    {
+        id: "npc-santos",
+        name: "Mr. Santos",
+        title: "Retired Teacher",
+        x: 200,
+        y: 280,
+        color: "#94a3b8",
+        accent: "#475569",
+    },
+    {
+        id: "npc-kyle",
+        name: "Kyle",
+        title: "University Student",
+        x: 780,
+        y: 1420,
+        color: "#60a5fa",
+        accent: "#1d4ed8",
+    },
+    {
+        id: "npc-pat",
+        name: "Pat",
+        title: "Tech Lab Intern",
+        x: 1620,
+        y: 580,
+        color: "#22d3ee",
+        accent: "#0e7490",
+    },
+    {
+        id: "npc-ana",
+        name: "Ana",
+        title: "Café Barista",
+        x: 1080,
+        y: 620,
+        color: "#c084fc",
+        accent: "#7e22ce",
+    },
+    {
+        id: "npc-ben",
+        name: "Ben",
+        title: "Courtyard Guard",
+        x: 1240,
+        y: 1360,
+        color: "#4ade80",
+        accent: "#15803d",
+    },
+    {
+        id: "npc-cruz",
+        name: "Mrs. Cruz",
+        title: "Concerned Parent",
+        x: 1820,
+        y: 1380,
+        color: "#f472b6",
+        accent: "#be185d",
+    },
+    {
+        id: "npc-marco",
+        name: "Marco",
+        title: "Radio Host",
+        x: 2040,
+        y: 180,
+        color: "#facc15",
+        accent: "#a16207",
+    },
+    {
+        id: "npc-elena",
+        name: "Elena",
+        title: "Records Clerk",
+        x: 160,
+        y: 160,
+        color: "#a8a29e",
+        accent: "#57534e",
+    },
+    {
+        id: "npc-dex",
+        name: "Dex",
+        title: "Delivery Driver",
+        x: 1480,
+        y: 760,
+        color: "#38bdf8",
+        accent: "#0369a1",
+    },
+];
+
+export const NPC_LABELS = Object.fromEntries(
+    NPCS.map((npc) => [npc.id, `${npc.name} (${npc.title})`])
+);

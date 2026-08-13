@@ -1,4 +1,5 @@
 import { ROOMS, WORLD_W, WORLD_H } from "../data/mapEnvironment";
+import { NPCS } from "../data/npcs";
 
 const MAP_W = 184;
 const MAP_H = 124;
@@ -110,6 +111,19 @@ export default function Minimap({
                     strokeWidth={1}
                     strokeDasharray="3 2"
                 />
+
+                {NPCS.map((npc) => {
+                    const dot = toMap(npc.x + 13, npc.y + 15);
+                    return (
+                        <circle
+                            key={npc.id}
+                            cx={dot.x}
+                            cy={dot.y}
+                            r={1.5}
+                            fill="rgba(192,132,252,0.7)"
+                        />
+                    );
+                })}
 
                 {otherPlayers
                     .filter(

@@ -259,6 +259,93 @@ function Decoration({ item }) {
                 </div>
             );
 
+        case "cafe-counter":
+            return (
+                <div
+                    className="absolute rounded-md border border-purple-900/40 bg-gradient-to-b from-purple-950/80 to-neutral-900 shadow-md"
+                    style={{
+                        left: item.x,
+                        top: item.y,
+                        width: item.w,
+                        height: item.h,
+                    }}
+                >
+                    <div className="absolute left-2 top-1 text-[7px] font-bold text-purple-300/60">
+                        CAFÉ
+                    </div>
+                </div>
+            );
+
+        case "cafe-table":
+            return (
+                <div
+                    className="absolute rounded-full border border-neutral-700/50 bg-neutral-800/60"
+                    style={{
+                        left: item.x,
+                        top: item.y,
+                        width: item.w,
+                        height: item.h,
+                    }}
+                />
+            );
+
+        case "fountain":
+            return (
+                <div
+                    className="absolute"
+                    style={{ left: item.x, top: item.y }}
+                >
+                    <div className="h-6 w-10 rounded-full border border-sky-900/40 bg-sky-950/50" />
+                    <div className="absolute left-1/2 top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-sky-400/20 shadow-[0_0_8px_2px_rgba(56,189,248,0.2)]" />
+                </div>
+            );
+
+        case "newspaper-stand":
+            return (
+                <div
+                    className="absolute opacity-60"
+                    style={{ left: item.x, top: item.y }}
+                >
+                    <div className="h-8 w-6 rounded-sm border border-neutral-600 bg-neutral-800" />
+                    <div className="absolute -right-1 top-0 h-7 w-4 rotate-6 rounded-sm bg-amber-100/80" />
+                    <div className="absolute -right-3 top-1 h-7 w-4 -rotate-3 rounded-sm bg-amber-50/70" />
+                </div>
+            );
+
+        case "filing-cabinet":
+            return (
+                <div
+                    className="absolute rounded-sm border border-stone-700 bg-gradient-to-b from-stone-700 to-stone-900"
+                    style={{
+                        left: item.x,
+                        top: item.y,
+                        width: item.w,
+                        height: item.h,
+                    }}
+                >
+                    {[0, 1, 2].map((i) => (
+                        <div
+                            key={i}
+                            className="absolute left-1 right-1 h-1 rounded-sm bg-stone-600"
+                            style={{ top: 10 + i * 14 }}
+                        />
+                    ))}
+                </div>
+            );
+
+        case "antenna":
+            return (
+                <div
+                    className="absolute"
+                    style={{ left: item.x, top: item.y }}
+                >
+                    <div className="mx-auto h-10 w-0.5 bg-neutral-500" />
+                    <div className="absolute -left-2 top-0 h-0.5 w-5 bg-neutral-500" />
+                    <div className="absolute -left-1 top-2 h-0.5 w-3 bg-neutral-500" />
+                    <div className="absolute left-1 top-0 h-1.5 w-1.5 rounded-full bg-red-500/60 animate-pulse" />
+                </div>
+            );
+
         default:
             return null;
     }
