@@ -13,6 +13,8 @@ import Interactable from "../components/Interactable";
 import OtherPlayer from "../components/OtherPlayer";
 
 import SourceInteractable from "../components/interactables/SourceInteractable";
+import GameEnvironment from "../components/environment/GameEnvironment";
+import BriefingTerminal from "../components/environment/BriefingTerminal";
 import EvidenceModal from "../components/EvidenceModal";
 import VoteModal from "../components/VoteModal";
 import VisionOverlay from "../components/VisionOverlay";
@@ -21,6 +23,7 @@ import ImposterPanel, {
     findNearbyInvestigationObject,
 } from "../components/ImposterPanel";
 import FabricateEvidenceModal from "../components/FabricateEvidenceModal";
+import Minimap from "../components/Minimap";
 
 import {
     getVisionConfig,
@@ -32,10 +35,13 @@ import lobbyListener from "../listener/lobbyListener";
 import AuthContext from "../context/AuthContext";
 
 
-const WALL_THICKNESS = 20;
+import {
+    INVESTIGATION_OBJECTS,
+    INTERIOR_WALLS,
+} from "../data/mapInteractables";
+import { WORLD_W, WORLD_H } from "../data/mapEnvironment";
 
-const WORLD_W = 2400;
-const WORLD_H = 1600;
+const WALL_THICKNESS = 20;
 
 
 const DEFAULT_GAME_STATE = {
@@ -157,6 +163,8 @@ export default function GameBoard() {
     const [discussionSecondsLeft, setDiscussionSecondsLeft] =
         useState(null);
 
+    const [restoredPosition, setRestoredPosition] = useState(null);
+
 
     const [message, setMessage] = useState(null);
 
@@ -205,6 +213,23 @@ export default function GameBoard() {
     |--------------------------------------------------------------------------
     */
 
+    const handleRestorePosition = useCallback((location) => {
+        if (location?.x == null || location?.y == null) {
+            return;
+        }
+
+        setPlayerRect((prev) => ({
+            ...prev,
+            x: location.x,
+            y: location.y,
+        }));
+
+        setRestoredPosition({
+            x: location.x,
+            y: location.y,
+        });
+    }, []);
+
     const {
         sendMessage,
         connected,
@@ -214,8 +239,30 @@ export default function GameBoard() {
         null,
         setOtherPlayers,
         setLobbyInfo,
-        setGameState
+        setGameState,
+        handleRestorePosition
     );
+
+    useEffect(() => {
+        if (!restoredPosition || !userId || !connected) {
+            return;
+        }
+
+        sendMessage({
+            action: "player_update",
+            name: playerName,
+            location: {
+                x: restoredPosition.x,
+                y: restoredPosition.y,
+            },
+        });
+    }, [
+        restoredPosition,
+        userId,
+        connected,
+        sendMessage,
+        playerName,
+    ]);
 
 
     /*
@@ -232,194 +279,53 @@ export default function GameBoard() {
                 y: 0,
                 w: WORLD_W,
                 h: WALL_THICKNESS,
+                variant: "boundary",
             },
-
             {
                 id: "wall-bottom",
                 x: 0,
                 y: WORLD_H - WALL_THICKNESS,
                 w: WORLD_W,
                 h: WALL_THICKNESS,
+                variant: "boundary",
             },
-
             {
                 id: "wall-left",
                 x: 0,
                 y: 0,
                 w: WALL_THICKNESS,
                 h: WORLD_H,
+                variant: "boundary",
             },
-
             {
                 id: "wall-right",
                 x: WORLD_W - WALL_THICKNESS,
                 y: 0,
                 w: WALL_THICKNESS,
                 h: WORLD_H,
+                variant: "boundary",
             },
-
-            {
-                id: "wall-mid",
-                x: WORLD_W / 2 - 60,
-                y: WORLD_H / 2 - 200,
-                w: 120,
-                h: 140,
-            },
-
-            {
-                id: "wall-north",
-                x: WORLD_W / 2 - 300,
-                y: WORLD_H / 2 - 400,
-                w: 200,
-                h: 30,
-            },
-
-            {
-                id: "wall-south",
-                x: WORLD_W / 2 + 100,
-                y: WORLD_H / 2 + 250,
-                w: 200,
-                h: 30,
-            },
-
-            // ---- Additional room-forming walls ----
-
-            {
-                id: "wall-library-room-a",
-                x: WORLD_W / 2 - 650,
-                y: WORLD_H / 2 - 220,
-                w: 30,
-                h: 260,
-            },
-
-            {
-                id: "wall-library-room-b",
-                x: WORLD_W / 2 - 650,
-                y: WORLD_H / 2 - 220,
-                w: 220,
-                h: 30,
-            },
-
-            {
-                id: "wall-tech-room-a",
-                x: WORLD_W / 2 + 380,
-                y: WORLD_H / 2 - 340,
-                w: 30,
-                h: 220,
-            },
-
-            {
-                id: "wall-tech-room-b",
-                x: WORLD_W / 2 + 380,
-                y: WORLD_H / 2 - 340,
-                w: 220,
-                h: 30,
-            },
-
-            {
-                id: "wall-newsroom-a",
-                x: WORLD_W / 2 - 620,
-                y: WORLD_H / 2 + 260,
-                w: 260,
-                h: 30,
-            },
-
-            {
-                id: "wall-newsroom-b",
-                x: WORLD_W / 2 - 620,
-                y: WORLD_H / 2 + 260,
-                w: 30,
-                h: 200,
-            },
+            ...INTERIOR_WALLS.map((wall) => ({
+                ...wall,
+                variant: wall.variant || "interior",
+            })),
         ],
         []
     );
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Interactable (orb — kept from before)
-    |--------------------------------------------------------------------------
-    */
+    const investigationObjects = useMemo(
+        () => INVESTIGATION_OBJECTS,
+        []
+    );
 
     const interactable = useMemo(
         () => ({
-            id: "orb",
-            x: WORLD_W / 2 + 300,
-            y: WORLD_H / 2 + 100,
+            id: "hub",
+            x: WORLD_W / 2 - 14,
+            y: WORLD_H / 2 - 14,
             w: 28,
             h: 28,
         }),
-        []
-    );
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Investigation Objects — Library / TV / Computer / Radio / Bulletin
-    | plus new props to make the map feel bigger and more purposeful.
-    |--------------------------------------------------------------------------
-    */
-
-    const investigationObjects = useMemo(
-        () => [
-            {
-                id: "library",
-                x: WORLD_W / 2 - 500,
-                y: WORLD_H / 2 - 100,
-                w: 40,
-                h: 40,
-            },
-            {
-                id: "tv",
-                x: WORLD_W / 2 - 400,
-                y: WORLD_H / 2 + 300,
-                w: 44,
-                h: 32,
-            },
-            {
-                id: "computer",
-                x: WORLD_W / 2 + 450,
-                y: WORLD_H / 2 - 250,
-                w: 38,
-                h: 32,
-            },
-            {
-                id: "radio",
-                x: WORLD_W / 2 - 550,
-                y: WORLD_H / 2 + 350,
-                w: 34,
-                h: 30,
-            },
-            {
-                id: "bulletin",
-                x: WORLD_W / 2 + 500,
-                y: WORLD_H / 2 + 300,
-                w: 40,
-                h: 34,
-            },
-            {
-                id: "newsdesk",
-                x: WORLD_W / 2 - 700,
-                y: WORLD_H / 2 - 350,
-                w: 42,
-                h: 34,
-            },
-            {
-                id: "archive-computer",
-                x: WORLD_W / 2 + 520,
-                y: WORLD_H / 2 - 400,
-                w: 38,
-                h: 32,
-            },
-            {
-                id: "second-radio",
-                x: WORLD_W / 2 - 700,
-                y: WORLD_H / 2 + 400,
-                w: 34,
-                h: 30,
-            },
-        ],
         []
     );
 
@@ -598,7 +504,7 @@ export default function GameBoard() {
         setMessage((current) =>
             current
                 ? null
-                : "The orb hums quietly. You feel slightly braver."
+                : "The briefing hub glows softly — a reminder of your mission."
         );
 
     }, []);
@@ -920,6 +826,18 @@ export default function GameBoard() {
             {/* Lobby Controls */}
             {/* ------------------------------------------------------------- */}
 
+            {connected && (
+                <Minimap
+                    playerRect={playerRect}
+                    otherPlayers={otherPlayers}
+                    userId={userId}
+                    viewportWidth={width}
+                    viewportHeight={height}
+                    walls={walls}
+                />
+            )}
+
+
             {gameState.status === "waiting" && (
                 <button
                     onClick={handleStartGame}
@@ -1075,7 +993,7 @@ export default function GameBoard() {
             {/* Game World */}
             {/* ------------------------------------------------------------- */}
 
-            <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle_at_30%_20%,_#1b1f2a,_#0a0c10)]">
+            <div className="relative h-full w-full overflow-hidden bg-[#06080c]">
 
                 {visionEnabled && (
                     <VisionOverlay
@@ -1095,6 +1013,8 @@ export default function GameBoard() {
                     }}
                 >
 
+                    <GameEnvironment />
+
                     {/* ----------------------------------------------------- */}
                     {/* Walls */}
                     {/* ----------------------------------------------------- */}
@@ -1106,6 +1026,7 @@ export default function GameBoard() {
                             y={wall.y}
                             w={wall.w}
                             h={wall.h}
+                            variant={wall.variant || "interior"}
                         />
                     ))}
 
@@ -1127,7 +1048,7 @@ export default function GameBoard() {
 
 
                     {/* ----------------------------------------------------- */}
-                    {/* Interactable (orb) */}
+                    {/* Briefing hub (center plaza) */}
                     {/* ----------------------------------------------------- */}
 
                     <Interactable
@@ -1137,7 +1058,12 @@ export default function GameBoard() {
                         h={interactable.h}
                         player={playerRect}
                         onInteract={handleInteract}
-                    />
+                        promptLabel="Press E — Briefing Hub"
+                    >
+                        {(isNear) => (
+                            <BriefingTerminal active={isNear} />
+                        )}
+                    </Interactable>
 
 
                     {/* ----------------------------------------------------- */}
@@ -1186,6 +1112,7 @@ export default function GameBoard() {
                         initialY={WORLD_H / 2}
                         size={26}
                         facing={playerFacing}
+                        restoredPosition={restoredPosition}
                         walls={collidables}
                         bounds={{
                             width: WORLD_W,

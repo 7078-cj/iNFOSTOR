@@ -60,6 +60,10 @@ class MyWebSocketConsumer(
             f"lobby_channels_{self.lobby_id}"
         )
 
+        self.positions_cache_key = (
+            f"lobby_positions_{self.lobby_id}"
+        )
+
         self.user = self.scope["user"]
 
         if not self.user.is_authenticated:
@@ -183,6 +187,19 @@ class MyWebSocketConsumer(
                 "type": "game_resumed",
                 **resume,
             })
+
+        else:
+
+            saved_location = await self._get_saved_location(
+                players
+            )
+
+            if saved_location:
+
+                await self.send_json({
+                    "type": "position_restored",
+                    "location": saved_location,
+                })
 
 
     # ==================================================================
@@ -349,6 +366,18 @@ class MyWebSocketConsumer(
             self.game.add_player
         )(
             player
+        )
+
+        await sync_to_async(
+            self.game.update_player_location
+        )(
+            self.player_id,
+            player["location"],
+        )
+
+        await self.save_player_position(
+            self.player_id,
+            player["location"],
         )
 
         if is_new_player:
@@ -1197,6 +1226,93 @@ class MyWebSocketConsumer(
     # ==================================================================
     # HELPERS
     # ==================================================================
+
+    async def _get_saved_location(
+        self,
+        lobby_players
+    ):
+        """
+        Prefer the live lobby cache entry, then fall back to the
+        GameEnvironment seat record (survives disconnect during play).
+        """
+
+        cached = lobby_players.get(self.player_id)
+
+        if cached:
+
+            location = cached.get("location")
+
+            if (
+                location
+                and location.get("x") is not None
+                and location.get("y") is not None
+                and not (
+                    location.get("x") == 0
+                    and location.get("y") == 0
+                )
+            ):
+                return location
+
+        cached_position = await self.get_player_position(
+            self.player_id
+        )
+
+        if cached_position:
+            return cached_position
+
+        return await sync_to_async(
+            self.game.get_player_location
+        )(self.player_id)
+
+
+    @sync_to_async
+    def get_player_position(
+        self,
+        player_id
+    ):
+
+        positions = cache.get(
+            self.positions_cache_key,
+            {}
+        )
+
+        location = positions.get(str(player_id))
+
+        if not location:
+            return None
+
+        x = location.get("x")
+        y = location.get("y")
+
+        if x is None or y is None:
+            return None
+
+        if x == 0 and y == 0:
+            return None
+
+        return location
+
+
+    @sync_to_async
+    def save_player_position(
+        self,
+        player_id,
+        location
+    ):
+
+        positions = cache.get(
+            self.positions_cache_key,
+            {}
+        )
+
+        positions[str(player_id)] = location
+
+        cache.set(
+            self.positions_cache_key,
+            positions,
+            timeout=PLAYER_CACHE_TIMEOUT
+        )
+
 
     async def send_json(
         self,

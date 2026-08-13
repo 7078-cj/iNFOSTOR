@@ -1,4 +1,12 @@
 import investigationContent from "../data/investigationContent";
+import {
+    getSourceContent,
+    getModalType,
+} from "../data/sourceVariants";
+import {
+    CONTENT_TYPE_MAP,
+    OBJECT_LABELS,
+} from "../data/mapInteractables";
 import TVView from "./evidenceModals/TVView";
 import RadioView from "./evidenceModals/RadioView";
 import LibraryView from "./evidenceModals/LibraryView";
@@ -7,26 +15,6 @@ import ComputerView from "./evidenceModals/ComputerView";
 import NewsDeskView from "./evidenceModals/NewsDeskView";
 import { ModalBackdrop, EmptySourceMessage } from "./evidenceModals/shared";
 
-const OBJECT_LABELS = {
-    library: "Public Library",
-    tv: "Channel 4 News TV",
-    bulletin: "Municipal Noticeboard",
-    radio: "Radyo Bayan FM",
-    computer: "Investigation Terminal",
-    newsdesk: "City News Desk",
-    "archive-computer": "Archive Terminal",
-    "second-radio": "Community Radio Booth",
-};
-
-const CONTENT_KEY_MAP = {
-    newsdesk: "bulletin",
-    "archive-computer": "computer",
-    "second-radio": "radio",
-};
-
-/**
- * Routes to a themed modal UI based on which world object was interacted with.
- */
 export default function EvidenceModal({
     objectId,
     announcementId,
@@ -35,10 +23,17 @@ export default function EvidenceModal({
     onClose,
     onSubmitEvidence,
 }) {
-    if (!objectId) return null;
+    if (!objectId || !announcementId) return null;
 
-    const contentKey = CONTENT_KEY_MAP[objectId] || objectId;
-    const content = investigationContent[announcementId]?.[contentKey];
+    const baseContent = investigationContent[announcementId] || {};
+    const content = getSourceContent(
+        announcementId,
+        objectId,
+        baseContent,
+        CONTENT_TYPE_MAP
+    );
+
+    const modalType = getModalType(objectId, CONTENT_TYPE_MAP);
     const objectLabel = OBJECT_LABELS[objectId] || objectId;
 
     const relevantToPlayer =
@@ -56,7 +51,7 @@ export default function EvidenceModal({
         <ModalBackdrop onClose={onClose}>
             {!content && <EmptySourceMessage />}
 
-            {content && contentKey === "tv" && (
+            {content && modalType === "tv" && (
                 <TVView
                     {...sharedProps}
                     title={content.title}
@@ -64,7 +59,7 @@ export default function EvidenceModal({
                 />
             )}
 
-            {content && contentKey === "radio" && (
+            {content && modalType === "radio" && (
                 <RadioView
                     {...sharedProps}
                     title={content.title}
@@ -72,7 +67,7 @@ export default function EvidenceModal({
                 />
             )}
 
-            {content && contentKey === "library" && (
+            {content && modalType === "library" && (
                 <LibraryView
                     {...sharedProps}
                     title={content.title}
@@ -88,19 +83,24 @@ export default function EvidenceModal({
                 />
             )}
 
-            {content && contentKey === "bulletin" && objectId !== "newsdesk" && (
-                <BulletinView
-                    {...sharedProps}
-                    title={content.title}
-                    text={content.notice}
-                />
-            )}
+            {content &&
+                modalType === "bulletin" &&
+                objectId !== "newsdesk" && (
+                    <BulletinView
+                        {...sharedProps}
+                        title={content.title}
+                        text={content.notice}
+                    />
+                )}
 
-            {content && contentKey === "computer" && (
+            {content && modalType === "computer" && (
                 <ComputerView
                     {...sharedProps}
                     content={content}
-                    isArchive={objectId === "archive-computer"}
+                    isArchive={
+                        objectId === "archive-computer" ||
+                        objectId === "official-records"
+                    }
                 />
             )}
         </ModalBackdrop>

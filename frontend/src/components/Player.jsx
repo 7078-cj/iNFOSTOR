@@ -15,6 +15,7 @@ export default function Player({
     bounds,
     onPositionChange,
     facing = Math.PI / 2,
+    restoredPosition = null,
     asset = null,
     assetClassName = "",
 }) {
@@ -58,6 +59,22 @@ export default function Player({
             window.removeEventListener("keyup", handleKeyUp);
         };
     }, []);
+
+    // Apply server-restored position after reconnect / refresh.
+    useEffect(() => {
+        if (
+            restoredPosition?.x == null ||
+            restoredPosition?.y == null
+        ) {
+            return;
+        }
+
+        setPosition((prev) => ({
+            ...prev,
+            x: restoredPosition.x,
+            y: restoredPosition.y,
+        }));
+    }, [restoredPosition?.x, restoredPosition?.y]);
 
     // --------------------------------------------------------------------------
     // Movement + Collision

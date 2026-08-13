@@ -25,7 +25,8 @@ function handleLobbyMessage(
     setPlayers,
     setLobbyInfo,
     setGameState,
-    ownPlayerIdRef
+    ownPlayerIdRef,
+    onRestorePosition
 ) {
     switch (data.type) {
 
@@ -51,6 +52,19 @@ function handleLobbyMessage(
                     prev.maxPlayers,
                 full: false,
             }));
+
+            if (data.location) {
+                onRestorePosition?.(data.location);
+            }
+
+            break;
+
+
+        case "position_restored":
+
+            if (data.location) {
+                onRestorePosition?.(data.location);
+            }
 
             break;
 
@@ -247,6 +261,10 @@ function handleLobbyMessage(
                     data.player_count ?? prev.playerCount,
             }));
 
+            if (data.location) {
+                onRestorePosition?.(data.location);
+            }
+
             break;
         }
 
@@ -421,7 +439,8 @@ export default function lobbyListener(
     onRefresh,
     setPlayers,
     setLobbyInfo,
-    setGameState
+    setGameState,
+    onRestorePosition
 ) {
 
     // Holds this client's own player_id once the "connection" message
@@ -459,7 +478,8 @@ export default function lobbyListener(
                     setPlayers,
                     setLobbyInfo,
                     setGameState,
-                    ownPlayerIdRef
+                    ownPlayerIdRef,
+                    onRestorePosition
                 );
             },
         }

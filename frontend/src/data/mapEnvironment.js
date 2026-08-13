@@ -1,0 +1,68 @@
+/** Static environment layout for the investigation map. */
+
+export const WORLD_W = 2400;
+export const WORLD_H = 1600;
+
+export const ROOMS = [
+    { id: "records-office", label: "Records Office", x: 60, y: 60, w: 400, h: 320, floor: "from-stone-900/50 to-slate-900/20", accent: "rgba(120,113,108,0.1)", labelColor: "text-stone-400/70" },
+    { id: "library", label: "Public Library", x: 480, y: 520, w: 380, h: 320, floor: "from-amber-950/50 to-amber-900/15", accent: "rgba(217,119,6,0.1)", labelColor: "text-amber-400/80" },
+    { id: "plaza", label: "Investigation Plaza", x: 880, y: 480, w: 640, h: 560, floor: "from-slate-800/40 to-slate-900/20", accent: "rgba(148,163,184,0.08)", labelColor: "text-slate-400" },
+    { id: "broadcast-booth", label: "Broadcast Booth", x: 1900, y: 60, w: 440, h: 320, floor: "from-orange-950/40 to-slate-900/20", accent: "rgba(249,115,22,0.08)", labelColor: "text-orange-400/70" },
+    { id: "tech-lab", label: "Tech Lab", x: 1500, y: 420, w: 480, h: 420, floor: "from-cyan-950/45 to-slate-900/20", accent: "rgba(34,211,238,0.09)", labelColor: "text-cyan-400/70" },
+    { id: "newsroom", label: "Newsroom", x: 480, y: 880, w: 440, h: 420, floor: "from-red-950/40 to-neutral-900/20", accent: "rgba(239,68,68,0.08)", labelColor: "text-red-400/70" },
+    { id: "media-lounge", label: "Media Lounge", x: 1240, y: 840, w: 540, h: 440, floor: "from-violet-950/35 to-slate-900/20", accent: "rgba(167,139,250,0.08)", labelColor: "text-violet-400/70" },
+    { id: "community-hall", label: "Community Hall", x: 480, y: 1300, w: 480, h: 260, floor: "from-emerald-950/30 to-slate-900/20", accent: "rgba(52,211,153,0.07)", labelColor: "text-emerald-400/60" },
+    { id: "courtyard", label: "South Courtyard", x: 1060, y: 1260, w: 480, h: 300, floor: "from-slate-800/30 to-slate-900/15", accent: "rgba(148,163,184,0.06)", labelColor: "text-slate-500" },
+    { id: "citizen-services", label: "Citizen Services", x: 1660, y: 1260, w: 680, h: 300, floor: "from-blue-950/35 to-slate-900/20", accent: "rgba(59,130,246,0.08)", labelColor: "text-blue-400/70" },
+];
+
+export const DECORATIONS = [
+    { type: "ring", x: 1200, y: 740, size: 120, color: "rgba(94,230,168,0.12)" },
+    { type: "ring", x: 1200, y: 740, size: 75, color: "rgba(94,230,168,0.06)" },
+    { type: "rug", x: 560, y: 580, w: 300, h: 200, color: "rgba(180,83,9,0.15)" },
+    { type: "bookshelf", x: 520, y: 540, w: 50, h: 120 },
+    { type: "bookshelf", x: 520, y: 680, w: 50, h: 100 },
+    { type: "bookshelf", x: 820, y: 560, w: 50, h: 140 },
+    { type: "lamp", x: 820, y: 620 },
+    { type: "rug", x: 120, y: 120, w: 320, h: 200, color: "rgba(120,113,108,0.12)" },
+    { type: "desk", x: 200, y: 180, w: 90, h: 44 },
+    { type: "desk", x: 320, y: 220, w: 90, h: 44 },
+    { type: "rug", x: 540, y: 940, w: 340, h: 220, color: "rgba(127,29,29,0.12)" },
+    { type: "desk", x: 580, y: 980, w: 80, h: 40 },
+    { type: "desk", x: 700, y: 1000, w: 80, h: 40 },
+    { type: "monitor", x: 600, y: 960, w: 36, h: 24 },
+    { type: "server-rack", x: 1540, y: 460, w: 36, h: 90 },
+    { type: "server-rack", x: 1920, y: 480, w: 36, h: 90 },
+    { type: "server-rack", x: 1740, y: 460, w: 36, h: 90 },
+    { type: "cable", x: 1680, y: 580, w: 140, h: 4 },
+    { type: "rug", x: 1580, y: 500, w: 380, h: 260, color: "rgba(8,145,178,0.12)" },
+    { type: "rug", x: 1280, y: 920, w: 420, h: 280, color: "rgba(109,40,217,0.1)" },
+    { type: "couch", x: 1340, y: 1140, w: 100, h: 36 },
+    { type: "couch", x: 1580, y: 1140, w: 100, h: 36 },
+    { type: "couch", x: 1720, y: 1180, w: 100, h: 36 },
+    { type: "rug", x: 1960, y: 100, w: 360, h: 220, color: "rgba(249,115,22,0.1)" },
+    { type: "monitor", x: 2080, y: 140, w: 44, h: 28 },
+    { type: "rug", x: 1720, y: 1300, w: 600, h: 200, color: "rgba(59,130,246,0.1)" },
+    { type: "bench", x: 1780, y: 1360, w: 120, h: 28 },
+    { type: "bench", x: 1960, y: 1360, w: 120, h: 28 },
+    { type: "rug", x: 560, y: 1340, w: 360, h: 160, color: "rgba(6,95,70,0.1)" },
+    { type: "bench", x: 620, y: 1400, w: 120, h: 28 },
+    { type: "bench", x: 800, y: 1400, w: 120, h: 28 },
+    { type: "rug", x: 1100, y: 1300, w: 400, h: 200, color: "rgba(100,116,139,0.1)" },
+    { type: "plant", x: 960, y: 460 },
+    { type: "plant", x: 1480, y: 760 },
+    { type: "plant", x: 1080, y: 1100 },
+    { type: "plant", x: 2200, y: 400 },
+    { type: "plant", x: 180, y: 340 },
+    { type: "plant", x: 2280, y: 1340 },
+    { type: "corridor", x: 860, y: 760, w: 560, h: 28, color: "rgba(255,255,255,0.02)" },
+    { type: "corridor", x: 1180, y: 480, w: 28, h: 420, color: "rgba(255,255,255,0.02)" },
+    { type: "corridor", x: 460, y: 820, w: 28, h: 400, color: "rgba(255,255,255,0.02)" },
+    { type: "corridor", x: 1480, y: 820, w: 28, h: 400, color: "rgba(255,255,255,0.02)" },
+    { type: "sign-post", x: 900, y: 820, label: "Sources →" },
+    { type: "sign-post", x: 1420, y: 820, label: "← Evidence" },
+    { type: "sign-post", x: 240, y: 400, label: "Records ↑" },
+    { type: "sign-post", x: 2140, y: 400, label: "Broadcast ↑" },
+];
+
+export const FLOOR_TILE = 48;

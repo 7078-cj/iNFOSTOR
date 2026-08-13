@@ -1,16 +1,6 @@
 import Interactable from "../Interactable";
 import { getSpriteForObject } from "./sprites";
-
-const PROMPTS = {
-    library: "Press E — Browse shelf",
-    tv: "Press E — Watch broadcast",
-    computer: "Press E — Use computer",
-    "archive-computer": "Press E — Archive terminal",
-    radio: "Press E — Tune in",
-    "second-radio": "Press E — Radio booth",
-    bulletin: "Press E — Read notices",
-    newsdesk: "Press E — News desk",
-};
+import { OBJECT_LABELS } from "../../data/mapInteractables";
 
 export default function SourceInteractable({
     id,
@@ -32,7 +22,7 @@ export default function SourceInteractable({
             h={h}
             player={player}
             onInteract={() => onInteract(id)}
-            promptLabel={PROMPTS[id] || "Press E — Investigate"}
+            promptLabel={`Press E — ${OBJECT_LABELS[id] || "Investigate"}`}
             disabled={disabled}
             disabledLabel={disabledLabel}
             asset={asset}

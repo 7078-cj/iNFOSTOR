@@ -284,6 +284,75 @@ class GameEnvironment:
         return True, state
 
 
+    def update_player_location(
+        self,
+        player_id,
+        location
+    ):
+        """
+        Persist a player's world position so reconnects can restore it.
+        """
+
+        state = self.get_state()
+
+        player_id = str(player_id)
+
+        player = state["players"].get(player_id)
+
+        if not player:
+            return False
+
+        if not isinstance(location, dict):
+            return False
+
+        x = location.get("x")
+        y = location.get("y")
+
+        if x is None or y is None:
+            return False
+
+        player["location"] = {
+            "x": x,
+            "y": y,
+        }
+
+        self.save_state(state)
+
+        return True
+
+
+    def get_player_location(self, player_id):
+        """
+        Return the last saved position for a player, or None if unset.
+        Treats (0, 0) as unset — the frontend default spawn is map center.
+        """
+
+        state = self.get_state()
+
+        player_id = str(player_id)
+
+        player = state["players"].get(player_id)
+
+        if not player:
+            return None
+
+        location = player.get("location")
+
+        if not location:
+            return None
+
+        x = location.get("x")
+        y = location.get("y")
+
+        if x is None or y is None:
+            return None
+
+        if x == 0 and y == 0:
+            return None
+
+        return {"x": x, "y": y}
+
+
     def remove_player(self, player_id, force=False):
         """
         Remove a player from the game.
@@ -435,6 +504,8 @@ class GameEnvironment:
             "discussion_ends_at": (
                 state.get("discussion_ends_at")
             ),
+
+            "location": player.get("location"),
         }
 
 
@@ -765,6 +836,25 @@ class GameEnvironment:
             "newsdesk",
             "archive-computer",
             "second-radio",
+            "archive-shelf",
+            "newspaper-rack",
+            "microfilm",
+            "press-monitor",
+            "rumor-board",
+            "fact-check-kiosk",
+            "social-terminal",
+            "community-tv",
+            "records-desk",
+            "whisper-booth",
+            "gossip-pinboard",
+            "town-hall-board",
+            "official-records",
+            "live-feed-monitor",
+            "satellite-radio",
+            "service-kiosk",
+            "phone-hotline",
+            "courtyard-bulletin",
+            "street-tv",
         }
 
         if object_id not in valid_objects:

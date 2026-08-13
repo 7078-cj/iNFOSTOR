@@ -165,14 +165,18 @@ export function NewsDeskSprite({ active = false }) {
 }
 
 export function getSpriteForObject(objectId, active = false) {
-    if (objectId === "tv") return <TVSprite active={active} />;
-    if (objectId === "library") return <LibrarySprite active={active} />;
-    if (objectId === "computer" || objectId === "archive-computer")
-        return <ComputerSprite active={active} />;
-    if (objectId === "radio" || objectId === "second-radio")
-        return <RadioSprite active={active} />;
-    if (objectId === "bulletin") return <BulletinSprite active={active} />;
-    if (objectId === "newsdesk") return <NewsDeskSprite active={active} />;
+    const tvIds = ["tv", "community-tv", "press-monitor", "live-feed-monitor", "street-tv"];
+    const libraryIds = ["library", "archive-shelf", "microfilm", "official-records"];
+    const computerIds = ["computer", "archive-computer", "fact-check-kiosk", "social-terminal", "service-kiosk"];
+    const radioIds = ["radio", "second-radio", "whisper-booth", "satellite-radio", "phone-hotline"];
+    const bulletinIds = ["bulletin", "newspaper-rack", "rumor-board", "records-desk", "gossip-pinboard", "town-hall-board", "courtyard-bulletin"];
 
-    return null;
+    if (tvIds.includes(objectId)) return <TVSprite active={active} />;
+    if (objectId === "newsdesk") return <NewsDeskSprite active={active} />;
+    if (libraryIds.includes(objectId)) return <LibrarySprite active={active} />;
+    if (computerIds.includes(objectId)) return <ComputerSprite active={active} />;
+    if (radioIds.includes(objectId)) return <RadioSprite active={active} />;
+    if (bulletinIds.includes(objectId)) return <BulletinSprite active={active} />;
+
+    return <BulletinSprite active={active} />;
 }
