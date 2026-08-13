@@ -24,7 +24,7 @@ import FabricateEvidenceModal from "../components/FabricateEvidenceModal";
 
 import {
     getVisionConfig,
-    isInVisionCone,
+    isPointVisible,
 } from "../utils/vision";
 
 import useWindowSize from "../hooks/useWindowSize";
@@ -452,7 +452,7 @@ export default function GameBoard() {
             if (!visionEnabled) {
                 return true;
             }
-            return isInVisionCone(
+            return isPointVisible(
                 viewerCenter.x,
                 viewerCenter.y,
                 playerFacing,

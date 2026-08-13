@@ -4,10 +4,12 @@ export const VISION = {
     investigator: {
         range: 480,
         halfAngleDeg: 70,
+        nearRadius: 120,
     },
     imposter: {
         range: 580,
         halfAngleDeg: 80,
+        nearRadius: 150,
     },
 };
 
@@ -38,6 +40,17 @@ function normalizeAngle(angle) {
 }
 
 /**
+ * Returns true when a target is within the always-visible radius
+ * around the player (360°, no facing required).
+ */
+export function isInNearRadius(viewerX, viewerY, targetX, targetY, config) {
+    const dx = targetX - viewerX;
+    const dy = targetY - viewerY;
+    const dist = Math.hypot(dx, dy);
+    return dist <= (config.nearRadius ?? 0);
+}
+
+/**
  * Returns true when a world-space point lies inside the viewer's forward cone.
  */
 export function isInVisionCone(
@@ -65,6 +78,23 @@ export function isInVisionCone(
     const halfAngle = getHalfAngleRad(config);
 
     return diff <= halfAngle;
+}
+
+/**
+ * Combined visibility: nearby bubble OR forward cone.
+ */
+export function isPointVisible(
+    viewerX,
+    viewerY,
+    facing,
+    targetX,
+    targetY,
+    config
+) {
+    return (
+        isInNearRadius(viewerX, viewerY, targetX, targetY, config) ||
+        isInVisionCone(viewerX, viewerY, facing, targetX, targetY, config)
+    );
 }
 
 /**
