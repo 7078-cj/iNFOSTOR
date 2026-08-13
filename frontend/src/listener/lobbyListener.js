@@ -4,9 +4,14 @@ import useWebSocket from "../hooks/useWebsocket";
 function handleLobbyMessage(
     data,
     setPlayers,
-    setLobbyInfo
+    setLobbyInfo,
+    setGameState
 ) {
     switch (data.type) {
+
+        // ------------------------------------------------------------
+        // LOBBY (unchanged)
+        // ------------------------------------------------------------
 
         case "connection":
 
@@ -48,32 +53,20 @@ function handleLobbyMessage(
 
             setPlayers((prev) => {
 
-                const incoming =
-                    data.player;
+                const incoming = data.player;
 
-                const exists =
-                    prev.some(
-                        (player) =>
-                            String(
-                                player.user_id
-                            ) ===
-                            String(
-                                incoming.user_id
-                            )
-                    );
-
+                const exists = prev.some(
+                    (player) =>
+                        String(player.user_id) ===
+                        String(incoming.user_id)
+                );
 
                 if (exists) {
                     return prev;
                 }
 
-
-                return [
-                    ...prev,
-                    incoming,
-                ];
+                return [...prev, incoming];
             });
-
 
             setLobbyInfo((prev) => ({
                 ...prev,
@@ -92,12 +85,8 @@ function handleLobbyMessage(
 
             setPlayers((prev) =>
                 prev.map((player) =>
-                    String(
-                        player.user_id
-                    ) ===
-                    String(
-                        data.player.user_id
-                    )
+                    String(player.user_id) ===
+                    String(data.player.user_id)
                         ? data.player
                         : player
                 )
@@ -111,15 +100,10 @@ function handleLobbyMessage(
             setPlayers((prev) =>
                 prev.filter(
                     (player) =>
-                        String(
-                            player.user_id
-                        ) !==
-                        String(
-                            data.user_id
-                        )
+                        String(player.user_id) !==
+                        String(data.user_id)
                 )
             );
-
 
             setLobbyInfo((prev) => ({
                 ...prev,
@@ -144,6 +128,121 @@ function handleLobbyMessage(
             break;
 
 
+        // ------------------------------------------------------------
+        // GAME STATE (new)
+        // ------------------------------------------------------------
+
+        case "game_started":
+
+            setGameState((prev) => ({
+                ...prev,
+                status: "playing",
+                round: data.round,
+                phase: data.phase,
+                announcement: data.announcement,
+                role: data.role,
+                challenge: data.challenge,
+                votes: {},
+                voteComplete: false,
+                voteUnanimous: false,
+                lastRoundResult: null,
+                finalResult: null,
+                error: null,
+            }));
+
+            break;
+
+
+        case "phase_changed":
+
+            setGameState((prev) => ({
+                ...prev,
+                phase: data.phase,
+            }));
+
+            break;
+
+
+        case "evidence_submitted":
+
+            setGameState((prev) => ({
+                ...prev,
+                evidenceLog: [
+                    ...(prev.evidenceLog || []),
+                    {
+                        playerId: data.player_id,
+                        evidence: data.evidence,
+                    },
+                ],
+            }));
+
+            break;
+
+
+        case "vote_submitted":
+
+            setGameState((prev) => ({
+                ...prev,
+                votes: {
+                    ...prev.votes,
+                    [data.player_id]: true,
+                },
+                voteComplete: data.complete,
+                voteUnanimous: data.unanimous,
+            }));
+
+            break;
+
+
+        case "round_finished":
+
+            setGameState((prev) => ({
+                ...prev,
+                lastRoundResult: data.result,
+            }));
+
+            break;
+
+
+        case "next_round":
+
+            setGameState((prev) => ({
+                ...prev,
+                round: data.round,
+                phase: data.phase,
+                announcement: data.announcement,
+                votes: {},
+                voteComplete: false,
+                voteUnanimous: false,
+                evidenceLog: [],
+                lastRoundResult: null,
+            }));
+
+            break;
+
+
+        case "game_finished":
+
+            setGameState((prev) => ({
+                ...prev,
+                status: "finished",
+                phase: "finished",
+                finalResult: data.result,
+            }));
+
+            break;
+
+
+        case "game_error":
+
+            setGameState((prev) => ({
+                ...prev,
+                error: data.message,
+            }));
+
+            break;
+
+
         default:
 
             console.log(
@@ -158,7 +257,8 @@ export default function lobbyListener(
     lobbyId,
     onRefresh,
     setPlayers,
-    setLobbyInfo
+    setLobbyInfo,
+    setGameState
 ) {
 
     const {
@@ -189,7 +289,8 @@ export default function lobbyListener(
                 handleLobbyMessage(
                     data,
                     setPlayers,
-                    setLobbyInfo
+                    setLobbyInfo,
+                    setGameState
                 );
             },
         }

@@ -11,6 +11,11 @@ import Wall from "../components/Wall";
 import Interactable from "../components/Interactable";
 import OtherPlayer from "../components/OtherPlayer";
 
+import Library from "../components/interactables/Library";
+import TV from "../components/interactables/TV";
+import Computer from "../components/interactables/Computer";
+import EvidenceModal from "../components/EvidenceModal";
+
 import useWindowSize from "../hooks/useWindowSize";
 import lobbyListener from "../listener/lobbyListener";
 import AuthContext from "../context/AuthContext";
@@ -22,6 +27,23 @@ const WORLD_W = 2400;
 const WORLD_H = 1600;
 
 
+const DEFAULT_GAME_STATE = {
+    status: "waiting", // waiting | playing | finished
+    round: 0,
+    phase: "waiting",
+    announcement: null,
+    role: null,
+    challenge: null,
+    votes: {},
+    voteComplete: false,
+    voteUnanimous: false,
+    evidenceLog: [],
+    lastRoundResult: null,
+    finalResult: null,
+    error: null,
+};
+
+
 export default function GameBoard() {
 
     const { lobbyId } = useParams();
@@ -30,7 +52,6 @@ export default function GameBoard() {
 
     const userId = user?.user_id;
 
-    // Change this depending on your User object
     const playerName =
         user?.first_name ||
         user?.username ||
@@ -68,7 +89,7 @@ export default function GameBoard() {
 
     /*
     |--------------------------------------------------------------------------
-    | Lobby Information
+    | Lobby / Game Information
     |--------------------------------------------------------------------------
     */
 
@@ -78,6 +99,21 @@ export default function GameBoard() {
         maxPlayers: 7,
         full: false,
     });
+
+    const [gameState, setGameState] = useState(
+        DEFAULT_GAME_STATE
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Interactable Modal
+    |--------------------------------------------------------------------------
+    */
+
+    const [activeObjectId, setActiveObjectId] = useState(
+        null
+    );
 
 
     /*
@@ -94,7 +130,8 @@ export default function GameBoard() {
         lobbyId,
         null,
         setOtherPlayers,
-        setLobbyInfo
+        setLobbyInfo,
+        setGameState
     );
 
 
@@ -168,7 +205,7 @@ export default function GameBoard() {
 
     /*
     |--------------------------------------------------------------------------
-    | Interactable
+    | Interactable (orb — kept from before)
     |--------------------------------------------------------------------------
     */
 
@@ -181,6 +218,61 @@ export default function GameBoard() {
             h: 28,
         }),
         []
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Investigation Objects — Library / TV / Computer
+    |--------------------------------------------------------------------------
+    */
+
+    const investigationObjects = useMemo(
+        () => [
+            {
+                id: "library",
+                x: WORLD_W / 2 - 500,
+                y: WORLD_H / 2 - 100,
+                w: 40,
+                h: 40,
+                Component: Library,
+            },
+            {
+                id: "tv",
+                x: WORLD_W / 2 - 400,
+                y: WORLD_H / 2 + 300,
+                w: 44,
+                h: 32,
+                Component: TV,
+            },
+            {
+                id: "computer",
+                x: WORLD_W / 2 + 450,
+                y: WORLD_H / 2 - 250,
+                w: 38,
+                h: 32,
+                Component: Computer,
+            },
+        ],
+        []
+    );
+
+    const handleObjectInteract = useCallback((objectId) => {
+        setActiveObjectId(objectId);
+    }, []);
+
+    const handleCloseModal = useCallback(() => {
+        setActiveObjectId(null);
+    }, []);
+
+    const handleSubmitEvidence = useCallback(
+        (evidence) => {
+            sendMessage({
+                action: "submit_evidence",
+                evidence,
+            });
+        },
+        [sendMessage]
     );
 
 
@@ -203,11 +295,20 @@ export default function GameBoard() {
             })),
 
             interactable,
+
+            ...investigationObjects.map((obj) => ({
+                id: obj.id,
+                x: obj.x,
+                y: obj.y,
+                w: obj.w,
+                h: obj.h,
+            })),
         ],
         [
             walls,
             otherPlayers,
             interactable,
+            investigationObjects,
         ]
     );
 
@@ -228,6 +329,7 @@ export default function GameBoard() {
             }
 
             sendMessage({
+                action: "player_update",
                 name: playerName,
 
                 location: {
@@ -246,7 +348,7 @@ export default function GameBoard() {
 
     /*
     |--------------------------------------------------------------------------
-    | Interaction
+    | Orb Interaction (unchanged)
     |--------------------------------------------------------------------------
     */
 
@@ -259,6 +361,32 @@ export default function GameBoard() {
         );
 
     }, []);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Game Actions
+    |--------------------------------------------------------------------------
+    */
+
+    const handleStartGame = useCallback(() => {
+        sendMessage({ action: "start_game" });
+    }, [sendMessage]);
+
+    const handleVote = useCallback(
+        (vote) => {
+            sendMessage({ action: "vote", vote });
+        },
+        [sendMessage]
+    );
+
+    const handleFinishRound = useCallback(() => {
+        sendMessage({ action: "finish_round" });
+    }, [sendMessage]);
+
+    const handleNextRound = useCallback(() => {
+        sendMessage({ action: "next_round" });
+    }, [sendMessage]);
 
 
     /*
@@ -276,6 +404,9 @@ export default function GameBoard() {
         (playerRect.y + playerRect.h / 2);
 
 
+    const activeChallenge = gameState.challenge;
+
+
     /*
     |--------------------------------------------------------------------------
     | Render
@@ -286,7 +417,7 @@ export default function GameBoard() {
         <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950 font-mono">
 
             {/* ------------------------------------------------------------- */}
-            {/* Lobby Information */}
+            {/* HUD */}
             {/* ------------------------------------------------------------- */}
 
             <div className="absolute top-4 z-10 flex flex-col items-center gap-1 text-xs uppercase tracking-wide">
@@ -315,7 +446,127 @@ export default function GameBoard() {
                     {lobbyInfo.maxPlayers}
                 </div>
 
+                {gameState.status === "playing" && (
+                    <div className="mt-1 flex flex-col items-center gap-0.5 text-slate-300">
+                        <div>
+                            Round {gameState.round} ·{" "}
+                            {gameState.phase}
+                        </div>
+                        <div className="text-amber-400">
+                            Role: {gameState.role}
+                        </div>
+                    </div>
+                )}
+
+                {gameState.error && (
+                    <div className="text-red-400">
+                        {gameState.error}
+                    </div>
+                )}
             </div>
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Lobby Controls */}
+            {/* ------------------------------------------------------------- */}
+
+            {gameState.status === "waiting" && (
+                <button
+                    onClick={handleStartGame}
+                    className="absolute top-4 right-4 z-10 rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium uppercase tracking-wide hover:bg-emerald-600"
+                >
+                    Start Game
+                </button>
+            )}
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Current Announcement */}
+            {/* ------------------------------------------------------------- */}
+
+            {gameState.announcement && (
+                <div className="absolute top-4 left-4 z-10 max-w-xs rounded border border-white/10 bg-black/70 p-3 text-xs text-slate-200">
+                    <div className="mb-1 font-semibold text-slate-100">
+                        {gameState.announcement.title}
+                    </div>
+                    <p className="leading-relaxed text-slate-400">
+                        {gameState.announcement.content}
+                    </p>
+                </div>
+            )}
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Vote / Round Controls */}
+            {/* ------------------------------------------------------------- */}
+
+            {gameState.phase === "consensus" && (
+                <div className="absolute bottom-6 right-6 z-10 flex gap-2">
+                    <button
+                        onClick={() => handleVote("FLAG")}
+                        className="rounded bg-red-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-red-600"
+                    >
+                        Flag
+                    </button>
+                    <button
+                        onClick={() =>
+                            handleVote("CONTINUE_INVESTIGATION")
+                        }
+                        className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-slate-600"
+                    >
+                        Keep Investigating
+                    </button>
+                </div>
+            )}
+
+            {gameState.voteComplete && !gameState.lastRoundResult && (
+                <button
+                    onClick={handleFinishRound}
+                    className="absolute bottom-6 right-6 z-10 rounded bg-sky-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-sky-600"
+                >
+                    Reveal Result
+                </button>
+            )}
+
+            {gameState.lastRoundResult && (
+                <div className="absolute bottom-20 right-6 z-10 max-w-xs rounded border border-white/10 bg-black/80 p-3 text-xs text-slate-200">
+                    <div className="mb-1 font-semibold">
+                        {gameState.lastRoundResult.successful
+                            ? "Investigation successful"
+                            : "Investigation failed"}
+                    </div>
+                    <div className="mb-1 text-slate-400">
+                        Verdict:{" "}
+                        {gameState.lastRoundResult.classification}
+                    </div>
+                    <p className="mb-2 text-slate-400">
+                        {gameState.lastRoundResult.explanation}
+                    </p>
+                    <button
+                        onClick={handleNextRound}
+                        className="rounded bg-emerald-700 px-2 py-1 text-[11px] font-medium uppercase hover:bg-emerald-600"
+                    >
+                        Next Round
+                    </button>
+                </div>
+            )}
+
+            {gameState.finalResult && (
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/85">
+                    <div className="max-w-sm rounded border border-white/10 bg-neutral-900 p-5 text-center text-sm text-slate-200">
+                        <div className="mb-2 text-lg font-semibold">
+                            {gameState.finalResult.winner === "investigators"
+                                ? "Investigators Win"
+                                : "The Imposter Wins"}
+                        </div>
+                        <p className="text-slate-400">
+                            Score: {gameState.finalResult.investigator_score}
+                            /{gameState.finalResult.required_score}{" "}
+                            required
+                        </p>
+                    </div>
+                </div>
+            )}
 
 
             {/* ------------------------------------------------------------- */}
@@ -371,7 +622,7 @@ export default function GameBoard() {
 
 
                     {/* ----------------------------------------------------- */}
-                    {/* Interactable */}
+                    {/* Interactable (orb) */}
                     {/* ----------------------------------------------------- */}
 
                     <Interactable
@@ -382,6 +633,26 @@ export default function GameBoard() {
                         player={playerRect}
                         onInteract={handleInteract}
                     />
+
+
+                    {/* ----------------------------------------------------- */}
+                    {/* Investigation Objects */}
+                    {/* ----------------------------------------------------- */}
+
+                    {investigationObjects.map((obj) => {
+                        const ObjComponent = obj.Component;
+
+                        return (
+                            <ObjComponent
+                                key={obj.id}
+                                id={obj.id}
+                                x={obj.x}
+                                y={obj.y}
+                                player={playerRect}
+                                onInteract={handleObjectInteract}
+                            />
+                        );
+                    })}
 
 
                     {/* ----------------------------------------------------- */}
@@ -406,7 +677,7 @@ export default function GameBoard() {
 
 
             {/* ------------------------------------------------------------- */}
-            {/* Interaction Message */}
+            {/* Interaction Message (orb) */}
             {/* ------------------------------------------------------------- */}
 
             {message && (
@@ -414,6 +685,19 @@ export default function GameBoard() {
                     {message}
                 </div>
             )}
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Evidence Modal */}
+            {/* ------------------------------------------------------------- */}
+
+            <EvidenceModal
+                objectId={activeObjectId}
+                announcementId={gameState.announcement?.id}
+                challenge={activeChallenge}
+                onClose={handleCloseModal}
+                onSubmitEvidence={handleSubmitEvidence}
+            />
 
         </div>
     );
