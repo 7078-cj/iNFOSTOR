@@ -2,6 +2,24 @@ import { useRef } from "react";
 import useWebSocket from "../hooks/useWebsocket";
 
 
+function normalizeSabotagedObjects(raw = {}) {
+    const normalized = {};
+
+    for (const [objectId, entry] of Object.entries(raw)) {
+        if (objectId.startsWith("_cooldown_")) {
+            continue;
+        }
+
+        normalized[objectId] = {
+            active: true,
+            secondsLeft: entry.seconds_left ?? 0,
+        };
+    }
+
+    return normalized;
+}
+
+
 function handleLobbyMessage(
     data,
     setPlayers,
@@ -159,6 +177,9 @@ function handleLobbyMessage(
                 finalResult: null,
                 score: data.investigator_score ?? 0,
                 requiredScore: data.required_score ?? null,
+                sabotagedObjects: {},
+                discussionEndsAt: null,
+                sabotageCooldown: 0,
                 error: null,
             }));
 
@@ -211,6 +232,12 @@ function handleLobbyMessage(
                 lastRoundResult:
                     data.last_round_result ?? null,
                 finalResult: data.final_result ?? null,
+                sabotagedObjects: normalizeSabotagedObjects(
+                    data.sabotaged_objects
+                ),
+                discussionEndsAt: data.discussion_ends_at
+                    ? data.discussion_ends_at * 1000
+                    : null,
                 error: null,
             }));
 
@@ -229,6 +256,9 @@ function handleLobbyMessage(
             setGameState((prev) => ({
                 ...prev,
                 phase: data.phase,
+                discussionEndsAt: data.discussion_ends_at
+                    ? data.discussion_ends_at * 1000
+                    : null,
 
                 // Entering a fresh voting round should clear out
                 // whatever vote state was left over from before.
@@ -240,6 +270,19 @@ function handleLobbyMessage(
                           voteComplete: false,
                       }
                     : {}),
+            }));
+
+            break;
+
+
+        case "object_sabotaged":
+
+            setGameState((prev) => ({
+                ...prev,
+                sabotagedObjects: normalizeSabotagedObjects(
+                    data.sabotaged_objects
+                ),
+                sabotageCooldown: 30,
             }));
 
             break;
@@ -334,6 +377,8 @@ function handleLobbyMessage(
                 evidenceLog: [],
                 lastRoundResult: null,
                 lastRoundNote: null,
+                sabotagedObjects: {},
+                discussionEndsAt: null,
             }));
 
             break;

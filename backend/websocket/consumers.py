@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from asgiref.sync import sync_to_async
@@ -8,6 +9,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from .game_environment import (
     GameEnvironment,
     MAX_PLAYERS,
+    DISCUSSION_DURATION,
 )
 
 
@@ -269,6 +271,12 @@ class MyWebSocketConsumer(
         elif action == "next_round":
 
             await self.handle_next_round()
+
+        elif action == "sabotage":
+
+            await self.handle_sabotage(
+                data
+            )
 
 
     # ==================================================================
@@ -584,6 +592,10 @@ class MyWebSocketConsumer(
         if phase not in allowed:
             return
 
+        # Call a Vote now starts discussion first, not voting directly.
+        if phase == "consensus":
+            phase = "discussion"
+
         state = await sync_to_async(
             self.game.set_phase
         )(phase)
@@ -596,8 +608,20 @@ class MyWebSocketConsumer(
 
                 "phase":
                     state["phase"],
+
+                "discussion_ends_at":
+                    state.get(
+                        "discussion_ends_at"
+                    ),
             }
         )
+
+        if state["phase"] == "discussion":
+            asyncio.create_task(
+                self._auto_open_consensus_after(
+                    DISCUSSION_DURATION
+                )
+            )
 
 
     async def phase_changed(
@@ -611,6 +635,125 @@ class MyWebSocketConsumer(
 
             "phase":
                 event["phase"],
+
+            "discussion_ends_at":
+                event.get(
+                    "discussion_ends_at"
+                ),
+        })
+
+
+    async def _auto_open_consensus_after(
+        self,
+        delay
+    ):
+
+        await asyncio.sleep(delay)
+
+        state = await sync_to_async(
+            self.game.auto_open_consensus
+        )()
+
+        if not state:
+            return
+
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type":
+                    "phase_changed",
+
+                "phase":
+                    state["phase"],
+
+                "discussion_ends_at":
+                    None,
+            }
+        )
+
+
+    # ==================================================================
+    # SABOTAGE
+    # ==================================================================
+
+    async def handle_sabotage(
+        self,
+        data
+    ):
+
+        object_id = data.get(
+            "object_id"
+        )
+
+        if not object_id:
+            return
+
+        success, result = (
+            await sync_to_async(
+                self.game.sabotage_object
+            )(
+                self.player_id,
+                object_id,
+            )
+        )
+
+        if not success:
+
+            await self.send_json({
+                "type":
+                    "game_error",
+
+                "message":
+                    result,
+            })
+
+            return
+
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type":
+                    "object_sabotaged",
+
+                "object_id":
+                    result["object_id"],
+
+                "duration":
+                    result["duration"],
+
+                "sabotaged_objects":
+                    result[
+                        "sabotaged_objects"
+                    ],
+
+                "saboteur_id":
+                    self.player_id,
+            }
+        )
+
+
+    async def object_sabotaged(
+        self,
+        event
+    ):
+
+        await self.send_json({
+            "type":
+                "object_sabotaged",
+
+            "object_id":
+                event["object_id"],
+
+            "duration":
+                event["duration"],
+
+            "sabotaged_objects":
+                event[
+                    "sabotaged_objects"
+                ],
+
+            "saboteur_id":
+                event["saboteur_id"],
         })
 
 

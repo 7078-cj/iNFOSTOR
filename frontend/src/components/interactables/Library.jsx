@@ -6,6 +6,8 @@ export default function Library({
     y,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel,
     asset, // e.g. "/assets/library.png" — omit to use the default marker
 }) {
     return (
@@ -17,6 +19,8 @@ export default function Library({
             player={player}
             onInteract={() => onInteract(id)}
             promptLabel="Press E — Library"
+            disabled={disabled}
+            disabledLabel={disabledLabel}
             asset={asset}
         />
     );

@@ -6,6 +6,8 @@ export default function Radio({
     y,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel,
     asset, // e.g. "/assets/radio.png" — omit to use the default marker
 }) {
     return (
@@ -17,6 +19,8 @@ export default function Radio({
             player={player}
             onInteract={() => onInteract(id)}
             promptLabel="Press E — Radio"
+            disabled={disabled}
+            disabledLabel={disabledLabel}
             asset={asset}
         />
     );

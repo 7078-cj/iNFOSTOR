@@ -3,6 +3,7 @@ import {
     useCallback,
     useMemo,
     useContext,
+    useEffect,
 } from "react";
 import { useParams } from "react-router-dom";
 
@@ -11,13 +12,20 @@ import Wall from "../components/Wall";
 import Interactable from "../components/Interactable";
 import OtherPlayer from "../components/OtherPlayer";
 
-import Library from "../components/interactables/Library";
-import TV from "../components/interactables/TV";
-import Computer from "../components/interactables/Computer";
-import Radio from "../components/interactables/Radio";
-import Bulletin from "../components/interactables/Bulletin";
+import SourceInteractable from "../components/interactables/SourceInteractable";
 import EvidenceModal from "../components/EvidenceModal";
 import VoteModal from "../components/VoteModal";
+import VisionOverlay from "../components/VisionOverlay";
+import PhaseBanner from "../components/PhaseBanner";
+import ImposterPanel, {
+    findNearbyInvestigationObject,
+} from "../components/ImposterPanel";
+import FabricateEvidenceModal from "../components/FabricateEvidenceModal";
+
+import {
+    getVisionConfig,
+    isInVisionCone,
+} from "../utils/vision";
 
 import useWindowSize from "../hooks/useWindowSize";
 import lobbyListener from "../listener/lobbyListener";
@@ -48,6 +56,9 @@ const DEFAULT_GAME_STATE = {
     score: 0,
     requiredScore: null,
     error: null,
+    sabotagedObjects: {},
+    discussionEndsAt: null,
+    sabotageCooldown: 0,
 };
 
 
@@ -138,6 +149,13 @@ export default function GameBoard() {
         w: 26,
         h: 26,
     });
+
+    const [playerFacing, setPlayerFacing] = useState(Math.PI / 2);
+
+    const [fabricateOpen, setFabricateOpen] = useState(false);
+
+    const [discussionSecondsLeft, setDiscussionSecondsLeft] =
+        useState(null);
 
 
     const [message, setMessage] = useState(null);
@@ -351,7 +369,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 - 100,
                 w: 40,
                 h: 40,
-                Component: Library,
             },
             {
                 id: "tv",
@@ -359,7 +376,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 + 300,
                 w: 44,
                 h: 32,
-                Component: TV,
             },
             {
                 id: "computer",
@@ -367,7 +383,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 - 250,
                 w: 38,
                 h: 32,
-                Component: Computer,
             },
             {
                 id: "radio",
@@ -375,7 +390,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 + 350,
                 w: 34,
                 h: 30,
-                Component: Radio,
             },
             {
                 id: "bulletin",
@@ -383,18 +397,13 @@ export default function GameBoard() {
                 y: WORLD_H / 2 + 300,
                 w: 40,
                 h: 34,
-                Component: Bulletin,
             },
-
-            // ---- New props (extra environment / investigation spots) ----
-
             {
                 id: "newsdesk",
                 x: WORLD_W / 2 - 700,
                 y: WORLD_H / 2 - 350,
                 w: 42,
                 h: 34,
-                Component: Bulletin,
             },
             {
                 id: "archive-computer",
@@ -402,7 +411,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 - 400,
                 w: 38,
                 h: 32,
-                Component: Computer,
             },
             {
                 id: "second-radio",
@@ -410,7 +418,6 @@ export default function GameBoard() {
                 y: WORLD_H / 2 + 400,
                 w: 34,
                 h: 30,
-                Component: Radio,
             },
         ],
         []
@@ -419,6 +426,77 @@ export default function GameBoard() {
     const handleObjectInteract = useCallback((objectId) => {
         setActiveObjectId(objectId);
     }, []);
+
+    const isImposter = gameState.role === "Imposter";
+
+    const visionConfig = useMemo(
+        () => getVisionConfig(isImposter),
+        [isImposter]
+    );
+
+    const visionEnabled =
+        gameState.status === "playing" &&
+        (gameState.phase === "investigation" ||
+            gameState.phase === "discussion");
+
+    const viewerCenter = useMemo(
+        () => ({
+            x: playerRect.x + playerRect.w / 2,
+            y: playerRect.y + playerRect.h / 2,
+        }),
+        [playerRect]
+    );
+
+    const isWorldPointVisible = useCallback(
+        (x, y) => {
+            if (!visionEnabled) {
+                return true;
+            }
+            return isInVisionCone(
+                viewerCenter.x,
+                viewerCenter.y,
+                playerFacing,
+                x,
+                y,
+                visionConfig
+            );
+        },
+        [
+            visionEnabled,
+            viewerCenter,
+            playerFacing,
+            visionConfig,
+        ]
+    );
+
+    const isObjectSabotagedForPlayer = useCallback(
+        (objectId) => {
+            const sabotage =
+                gameState.sabotagedObjects?.[objectId];
+            if (!sabotage?.active) {
+                return false;
+            }
+            return !isImposter;
+        },
+        [gameState.sabotagedObjects, isImposter]
+    );
+
+    const nearbySabotageTarget = useMemo(
+        () =>
+            isImposter
+                ? findNearbyInvestigationObject(
+                      playerRect,
+                      investigationObjects,
+                      gameState.sabotagedObjects
+                  )
+                : null,
+        [
+            isImposter,
+            playerRect,
+            investigationObjects,
+            gameState.sabotagedObjects,
+        ]
+    );
 
     const handleCloseModal = useCallback(() => {
         setActiveObjectId(null);
@@ -479,9 +557,13 @@ export default function GameBoard() {
     */
 
     const handlePositionChange = useCallback(
-        (next) => {
+        (next, facing) => {
 
             setPlayerRect(next);
+
+            if (facing != null) {
+                setPlayerFacing(facing);
+            }
 
             if (!userId) {
                 return;
@@ -536,6 +618,30 @@ export default function GameBoard() {
         sendMessage({ action: "set_phase", phase: "consensus" });
     }, [sendMessage]);
 
+    const handleFabricateEvidence = useCallback(
+        (note) => {
+            sendMessage({
+                action: "submit_evidence",
+                evidence: {
+                    source: "imposter",
+                    note,
+                    fabricated: true,
+                },
+            });
+        },
+        [sendMessage]
+    );
+
+    const handleSabotage = useCallback(() => {
+        if (!nearbySabotageTarget) {
+            return;
+        }
+        sendMessage({
+            action: "sabotage",
+            object_id: nearbySabotageTarget,
+        });
+    }, [sendMessage, nearbySabotageTarget]);
+
     const handleVote = useCallback(
         (vote) => {
             // Optimistically lock the buttons for this player while
@@ -551,6 +657,133 @@ export default function GameBoard() {
     const handleNextRound = useCallback(() => {
         sendMessage({ action: "next_round" });
     }, [sendMessage]);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Discussion Timer + Imposter Hotkeys
+    |--------------------------------------------------------------------------
+    */
+
+    useEffect(() => {
+        if (
+            gameState.phase !== "discussion" ||
+            !gameState.discussionEndsAt
+        ) {
+            setDiscussionSecondsLeft(null);
+            return undefined;
+        }
+
+        const tick = () => {
+            const remaining = Math.max(
+                0,
+                Math.ceil(
+                    (gameState.discussionEndsAt - Date.now()) / 1000
+                )
+            );
+            setDiscussionSecondsLeft(remaining);
+        };
+
+        tick();
+        const interval = setInterval(tick, 500);
+        return () => clearInterval(interval);
+    }, [gameState.phase, gameState.discussionEndsAt]);
+
+    useEffect(() => {
+        if (gameState.lastRoundNote?.type !== "inconclusive") {
+            return undefined;
+        }
+
+        const timeout = setTimeout(() => {
+            setGameState((prev) => ({
+                ...prev,
+                lastRoundNote: null,
+            }));
+        }, 5000);
+
+        return () => clearTimeout(timeout);
+    }, [gameState.lastRoundNote, setGameState]);
+
+    useEffect(() => {
+        if (!isImposter) {
+            return undefined;
+        }
+
+        const handleKeyDown = (e) => {
+            const key = e.key.toLowerCase();
+
+            if (key === "g") {
+                setFabricateOpen(true);
+            }
+
+            if (key === "f") {
+                handleSabotage();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () =>
+            window.removeEventListener("keydown", handleKeyDown);
+    }, [isImposter, handleSabotage]);
+
+    useEffect(() => {
+        if (gameState.sabotageCooldown <= 0) {
+            return undefined;
+        }
+
+        const interval = setInterval(() => {
+            setGameState((prev) => ({
+                ...prev,
+                sabotageCooldown: Math.max(
+                    0,
+                    prev.sabotageCooldown - 1
+                ),
+            }));
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [gameState.sabotageCooldown, setGameState]);
+
+    const sabotageCount = Object.keys(
+        gameState.sabotagedObjects || {}
+    ).length;
+
+    useEffect(() => {
+        if (sabotageCount === 0) {
+            return undefined;
+        }
+
+        const interval = setInterval(() => {
+            setGameState((prev) => {
+                const next = { ...prev.sabotagedObjects };
+                let changed = false;
+
+                for (const [objectId, info] of Object.entries(next)) {
+                    if (info.secondsLeft <= 1) {
+                        delete next[objectId];
+                        changed = true;
+                    } else {
+                        next[objectId] = {
+                            ...info,
+                            secondsLeft: info.secondsLeft - 1,
+                        };
+                        changed = true;
+                    }
+                }
+
+                if (!changed) {
+                    return prev;
+                }
+
+                return {
+                    ...prev,
+                    sabotagedObjects: next,
+                };
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [sabotageCount, setGameState]);
 
 
     /*
@@ -581,9 +814,34 @@ export default function GameBoard() {
 
     const canCallVote =
         gameState.status === "playing" &&
-        gameState.phase !== "consensus" &&
-        gameState.phase !== "result" &&
+        gameState.phase === "investigation" &&
         !gameState.lastRoundResult;
+
+    const visibleOtherPlayers = useMemo(
+        () =>
+            otherPlayers
+                .filter(
+                    (player) =>
+                        String(player.user_id) !==
+                        String(userId)
+                )
+                .filter((player) => {
+                    if (!visionEnabled) {
+                        return true;
+                    }
+                    const px =
+                        player.location.x + 13;
+                    const py =
+                        player.location.y + 13;
+                    return isWorldPointVisible(px, py);
+                }),
+        [
+            otherPlayers,
+            userId,
+            visionEnabled,
+            isWorldPointVisible,
+        ]
+    );
 
 
     /*
@@ -603,6 +861,7 @@ export default function GameBoard() {
 
                 <div className="text-slate-400">
                     WASD / Arrows to move · E to interact
+                    {isImposter && " · G fabricate · F sabotage"}
                 </div>
 
                 <div className="text-slate-500">
@@ -633,7 +892,13 @@ export default function GameBoard() {
                         </div>
                         <div className="text-amber-400">
                             Role: {gameState.role}
+                            {isImposter && " — wider vision"}
                         </div>
+                        {activeChallenge && (
+                            <div className="max-w-xs text-center text-[11px] normal-case text-slate-500">
+                                {activeChallenge.instructions}
+                            </div>
+                        )}
                         {gameState.requiredScore != null && (
                             <div className="text-emerald-400">
                                 Investigators: {gameState.score}/
@@ -693,6 +958,29 @@ export default function GameBoard() {
                     Call a Vote
                 </button>
             )}
+
+            <PhaseBanner
+                phase={gameState.phase}
+                round={gameState.round}
+                discussionSecondsLeft={discussionSecondsLeft}
+                evidenceCount={gameState.evidenceLog?.length ?? 0}
+            />
+
+            {isImposter && gameState.status === "playing" && (
+                <ImposterPanel
+                    phase={gameState.phase}
+                    nearbyObjectId={nearbySabotageTarget}
+                    sabotageCooldown={gameState.sabotageCooldown}
+                    onFabricate={() => setFabricateOpen(true)}
+                    onSabotage={handleSabotage}
+                />
+            )}
+
+            <FabricateEvidenceModal
+                open={fabricateOpen}
+                onClose={() => setFabricateOpen(false)}
+                onSubmit={handleFabricateEvidence}
+            />
 
 
             {/* ------------------------------------------------------------- */}
@@ -769,6 +1057,15 @@ export default function GameBoard() {
                             /{gameState.finalResult.required_score}{" "}
                             required
                         </p>
+                        {gameState.finalResult.imposter_id &&
+                            gameState.finalResult.players && (
+                                <p className="mt-2 text-red-400">
+                                    The Imposter was{" "}
+                                    {gameState.finalResult.players[
+                                        gameState.finalResult.imposter_id
+                                    ]?.name || "unknown"}
+                                </p>
+                            )}
                     </div>
                 </div>
             )}
@@ -779,6 +1076,15 @@ export default function GameBoard() {
             {/* ------------------------------------------------------------- */}
 
             <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle_at_30%_20%,_#1b1f2a,_#0a0c10)]">
+
+                {visionEnabled && (
+                    <VisionOverlay
+                        width={width}
+                        height={height}
+                        facing={playerFacing}
+                        visionConfig={visionConfig}
+                    />
+                )}
 
                 <div
                     className="absolute left-0 top-0"
@@ -808,13 +1114,7 @@ export default function GameBoard() {
                     {/* Other Players */}
                     {/* ----------------------------------------------------- */}
 
-                    {otherPlayers
-                        .filter(
-                            (player) =>
-                                String(player.user_id) !==
-                                String(userId)
-                        )
-                        .map((player) => (
+                    {visibleOtherPlayers.map((player) => (
                             <OtherPlayer
                                 key={player.id}
                                 x={player.location.x}
@@ -845,16 +1145,33 @@ export default function GameBoard() {
                     {/* ----------------------------------------------------- */}
 
                     {investigationObjects.map((obj) => {
-                        const ObjComponent = obj.Component;
+                        const centerX = obj.x + obj.w / 2;
+                        const centerY = obj.y + obj.h / 2;
+                        const visible = isWorldPointVisible(
+                            centerX,
+                            centerY
+                        );
+
+                        if (!visible) {
+                            return null;
+                        }
+
+                        const sabotaged = isObjectSabotagedForPlayer(
+                            obj.id
+                        );
 
                         return (
-                            <ObjComponent
+                            <SourceInteractable
                                 key={obj.id}
                                 id={obj.id}
                                 x={obj.x}
                                 y={obj.y}
+                                w={obj.w}
+                                h={obj.h}
                                 player={playerRect}
                                 onInteract={handleObjectInteract}
+                                disabled={sabotaged}
+                                disabledLabel="Sabotaged"
                             />
                         );
                     })}
@@ -868,6 +1185,7 @@ export default function GameBoard() {
                         initialX={WORLD_W / 2}
                         initialY={WORLD_H / 2}
                         size={26}
+                        facing={playerFacing}
                         walls={collidables}
                         bounds={{
                             width: WORLD_W,

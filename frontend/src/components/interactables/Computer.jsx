@@ -6,6 +6,8 @@ export default function Computer({
     y,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel,
     asset, // e.g. "/assets/computer.png" — omit to use the default marker
 }) {
     return (
@@ -17,6 +19,8 @@ export default function Computer({
             player={player}
             onInteract={() => onInteract(id)}
             promptLabel="Press E — Computer"
+            disabled={disabled}
+            disabledLabel={disabledLabel}
             asset={asset}
         />
     );

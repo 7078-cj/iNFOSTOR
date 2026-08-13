@@ -6,6 +6,8 @@ export default function Bulletin({
     y,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel,
     asset, // e.g. "/assets/bulletin.png" — omit to use the default marker
 }) {
     return (
@@ -17,6 +19,8 @@ export default function Bulletin({
             player={player}
             onInteract={() => onInteract(id)}
             promptLabel="Press E — Noticeboard"
+            disabled={disabled}
+            disabledLabel={disabledLabel}
             asset={asset}
         />
     );

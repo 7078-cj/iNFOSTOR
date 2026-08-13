@@ -12,9 +12,12 @@ export default function Interactable({
     z = 0,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel = "Unavailable",
     promptLabel = "Press E",
     asset = null,
     assetClassName = "",
+    children = null,
 }) {
     const rect = { x, y, w, h };
 
@@ -23,7 +26,7 @@ export default function Interactable({
         : false;
 
     useEffect(() => {
-        if (!isNear) return;
+        if (!isNear || disabled) return;
 
         const handleKeyDown = (e) => {
             if (e.key.toLowerCase() === INTERACT_KEY) {
@@ -36,15 +39,17 @@ export default function Interactable({
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
         };
-    }, [isNear, onInteract]);
+    }, [isNear, onInteract, disabled]);
 
     return (
         <>
             <div
                 className={`absolute transition-shadow duration-200 ${
-                    isNear
-                        ? "shadow-[0_0_18px_6px_rgba(120,200,255,0.55)]"
-                        : "shadow-[0_0_8px_2px_rgba(120,200,255,0.25)]"
+                    disabled
+                        ? "opacity-30 grayscale"
+                        : isNear
+                          ? "shadow-[0_0_18px_6px_rgba(120,200,255,0.55)]"
+                          : "shadow-[0_0_8px_2px_rgba(120,200,255,0.25)]"
                 }`}
                 style={{
                     left: x,
@@ -61,12 +66,16 @@ export default function Interactable({
                         draggable={false}
                         className={`h-full w-full object-contain ${assetClassName}`}
                     />
+                ) : typeof children === "function" ? (
+                    children(isNear)
+                ) : children ? (
+                    children
                 ) : (
                     <div className="h-full w-full rounded-full bg-sky-400" />
                 )}
             </div>
 
-            {isNear && (
+            {isNear && !disabled && (
                 <div
                     className="absolute whitespace-nowrap rounded-full border border-sky-400 bg-neutral-900 px-2 py-0.5 text-[11px] text-sky-100"
                     style={{
@@ -76,6 +85,19 @@ export default function Interactable({
                     }}
                 >
                     {promptLabel}
+                </div>
+            )}
+
+            {isNear && disabled && (
+                <div
+                    className="absolute whitespace-nowrap rounded-full border border-red-500/50 bg-neutral-900 px-2 py-0.5 text-[11px] text-red-300"
+                    style={{
+                        left: x + w / 2 - 40,
+                        top: y - 26,
+                        zIndex: z + 1,
+                    }}
+                >
+                    {disabledLabel}
                 </div>
             )}
         </>

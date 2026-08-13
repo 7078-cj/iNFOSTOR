@@ -83,7 +83,8 @@ export default function VoteModal({
                             •{" "}
                             {typeof entry.evidence === "string"
                                 ? entry.evidence
-                                : entry.evidence?.summary ||
+                                : entry.evidence?.note ||
+                                  entry.evidence?.summary ||
                                   JSON.stringify(entry.evidence)}
                         </div>
                     ))}

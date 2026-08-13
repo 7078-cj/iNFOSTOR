@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { overlaps, resolveCollision } from "../utils/collision";
+import { getFacingFromDelta } from "../utils/vision";
 
 const SPEED = 4;
 
@@ -13,6 +14,7 @@ export default function Player({
     walls = [],
     bounds,
     onPositionChange,
+    facing = Math.PI / 2,
     asset = null,
     assetClassName = "",
 }) {
@@ -33,6 +35,7 @@ export default function Player({
 
     const keysRef = useRef({});
     const frameRef = useRef(null);
+    const facingRef = useRef(Math.PI / 2);
 
     // --------------------------------------------------------------------------
     // Keyboard Input
@@ -143,11 +146,19 @@ export default function Player({
                 // Report Position Change
                 // --------------------------------------------------------------
 
+                if (dx !== 0 || dy !== 0) {
+                    facingRef.current = getFacingFromDelta(
+                        dx,
+                        dy,
+                        facingRef.current
+                    );
+                }
+
                 if (
                     next.x !== prev.x ||
                     next.y !== prev.y
                 ) {
-                    onPositionChange?.(next);
+                    onPositionChange?.(next, facingRef.current);
                 }
 
                 return next;
@@ -188,7 +199,15 @@ export default function Player({
                     className={`h-full w-full object-contain ${assetClassName}`}
                 />
             ) : (
-                <div className="h-full w-full rounded-md bg-emerald-400 shadow-[0_0_12px_3px_rgba(94,230,168,0.5)]" />
+                <>
+                    <div className="h-full w-full rounded-md bg-emerald-400 shadow-[0_0_12px_3px_rgba(94,230,168,0.5)]" />
+                    <div
+                        className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-200"
+                        style={{
+                            transform: `translate(-50%, -50%) rotate(${facing}rad) translateY(-14px)`,
+                        }}
+                    />
+                </>
             )}
         </div>
     );

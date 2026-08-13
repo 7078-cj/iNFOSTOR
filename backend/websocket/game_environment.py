@@ -1,9 +1,13 @@
 import random
+import time
 from django.core.cache import cache
 
 
 MAX_PLAYERS = 7
 GAME_CACHE_TIMEOUT = 60 * 60
+DISCUSSION_DURATION = 15
+SABOTAGE_DURATION = 45
+SABOTAGE_COOLDOWN = 30
 
 
 class GameEnvironment:
@@ -204,6 +208,10 @@ class GameEnvironment:
             "round_results": [],
 
             "scores": {},
+
+            "sabotaged_objects": {},
+
+            "discussion_ends_at": None,
 
         }
 
@@ -419,6 +427,14 @@ class GameEnvironment:
                 if state["status"] == "finished"
                 else None
             ),
+
+            "sabotaged_objects": (
+                self.get_active_sabotages(state)
+            ),
+
+            "discussion_ends_at": (
+                state.get("discussion_ends_at")
+            ),
         }
 
 
@@ -501,8 +517,10 @@ class GameEnvironment:
                     "instructions": (
                         "Prevent the group from reaching "
                         "a correct majority decision. "
-                        "Question valid evidence and "
-                        "defend questionable information."
+                        "Press G to fabricate false evidence, "
+                        "F to sabotage nearby sources "
+                        "(blocks investigators for 45s). "
+                        "You see farther than others."
                     ),
                 }
 
@@ -531,6 +549,10 @@ class GameEnvironment:
         state["ready_players"] = []
 
         state["evidence"] = {}
+
+        state["sabotaged_objects"] = {}
+
+        state["discussion_ends_at"] = None
 
         self.save_state(state)
 
@@ -620,6 +642,10 @@ class GameEnvironment:
 
         state["votes"] = {}
 
+        state["sabotaged_objects"] = {}
+
+        state["discussion_ends_at"] = None
+
         self.save_state(state)
 
         return state
@@ -655,6 +681,145 @@ class GameEnvironment:
 
 
     # ==================================================================
+    # SABOTAGE (Imposter ability)
+    # ==================================================================
+
+    def get_active_sabotages(self, state=None):
+
+        if state is None:
+            state = self.get_state()
+
+        now = time.time()
+
+        sabotaged = state.get(
+            "sabotaged_objects",
+            {}
+        )
+
+        active = {}
+
+        for object_id, expiry in sabotaged.items():
+
+            if object_id.startswith("_cooldown_"):
+                continue
+
+            if expiry > now:
+                active[object_id] = {
+                    "expires_at": expiry,
+                    "seconds_left": int(
+                        expiry - now
+                    ) + 1,
+                }
+
+        return active
+
+
+    def is_object_sabotaged(
+        self,
+        object_id,
+        state=None
+    ):
+
+        active = self.get_active_sabotages(
+            state
+        )
+
+        return object_id in active
+
+
+    def sabotage_object(
+        self,
+        player_id,
+        object_id
+    ):
+
+        state = self.get_state()
+
+        player_id = str(player_id)
+
+        player = state["players"].get(
+            player_id
+        )
+
+        if not player:
+            return False, "Player does not exist."
+
+        if player["role"] != "Imposter":
+            return False, "Only the Imposter can sabotage."
+
+        if state["phase"] not in (
+            "investigation",
+            "discussion",
+        ):
+            return False, (
+                "Sabotage is only available "
+                "during investigation."
+            )
+
+        valid_objects = {
+            "library",
+            "tv",
+            "computer",
+            "radio",
+            "bulletin",
+            "newsdesk",
+            "archive-computer",
+            "second-radio",
+        }
+
+        if object_id not in valid_objects:
+            return False, "Invalid object."
+
+        now = time.time()
+
+        cooldown_key = (
+            f"_cooldown_{player_id}"
+        )
+
+        cooldown_until = state.get(
+            "sabotaged_objects",
+            {}
+        ).get(cooldown_key, 0)
+
+        if cooldown_until > now:
+            return False, (
+                "Sabotage is on cooldown."
+            )
+
+        if self.is_object_sabotaged(
+            object_id,
+            state
+        ):
+            return False, (
+                "That source is already "
+                "sabotaged."
+            )
+
+        if "sabotaged_objects" not in state:
+            state["sabotaged_objects"] = {}
+
+        state["sabotaged_objects"][
+            object_id
+        ] = now + SABOTAGE_DURATION
+
+        state["sabotaged_objects"][
+            cooldown_key
+        ] = now + SABOTAGE_COOLDOWN
+
+        self.save_state(state)
+
+        return True, {
+            "object_id": object_id,
+            "duration": SABOTAGE_DURATION,
+            "sabotaged_objects": (
+                self.get_active_sabotages(
+                    state
+                )
+            ),
+        }
+
+
+    # ==================================================================
     # PHASE
     # ==================================================================
 
@@ -664,15 +829,44 @@ class GameEnvironment:
 
         state["phase"] = phase
 
-        # Entering the consensus/voting phase should start with a
-        # clean ballot, in case this round's votes were somehow
-        # already populated (e.g. a phase re-trigger).
+        # Entering discussion starts a timed window before voting.
+        if phase == "discussion":
+            state["discussion_ends_at"] = (
+                time.time() + DISCUSSION_DURATION
+            )
+
         if phase == "consensus":
             state["votes"] = {}
+            state["discussion_ends_at"] = None
+
+        if phase == "investigation":
+            state["discussion_ends_at"] = None
 
         self.save_state(state)
 
         return state
+
+
+    def begin_discussion(self):
+
+        return self.set_phase("discussion")
+
+
+    def auto_open_consensus(self):
+
+        state = self.get_state()
+
+        if state["phase"] != "discussion":
+            return None
+
+        ends_at = state.get(
+            "discussion_ends_at"
+        )
+
+        if ends_at and time.time() < ends_at:
+            return None
+
+        return self.set_phase("consensus")
 
 
     # ==================================================================
@@ -900,6 +1094,10 @@ class GameEnvironment:
         state["evidence"] = {}
 
         state["votes"] = {}
+
+        state["sabotaged_objects"] = {}
+
+        state["discussion_ends_at"] = None
 
         self.save_state(state)
 

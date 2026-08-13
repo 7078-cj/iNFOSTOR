@@ -6,6 +6,8 @@ export default function TV({
     y,
     player,
     onInteract,
+    disabled = false,
+    disabledLabel,
     asset, // e.g. "/assets/tv.png" — omit to use the default marker
 }) {
     return (
@@ -17,6 +19,8 @@ export default function TV({
             player={player}
             onInteract={() => onInteract(id)}
             promptLabel="Press E — TV"
+            disabled={disabled}
+            disabledLabel={disabledLabel}
             asset={asset}
         />
     );
