@@ -43,6 +43,21 @@ class MyWebSocketConsumer(
             f"lobby_players_{self.lobby_id}"
         )
 
+        # --------------------------------------------------------------
+        # Tracks which channel_name is the CURRENT authoritative socket
+        # for each player_id: { player_id: channel_name }.
+        #
+        # This is what lets us handle reload/reconnect deterministically
+        # instead of racing the old socket's disconnect() against the
+        # new socket's connect(). Whoever connects most recently for a
+        # given player_id becomes authoritative, and we actively evict
+        # the previous channel rather than hoping it cleans up in time.
+        # --------------------------------------------------------------
+
+        self.channels_cache_key = (
+            f"lobby_channels_{self.lobby_id}"
+        )
+
         self.user = self.scope["user"]
 
         if not self.user.is_authenticated:
@@ -67,19 +82,14 @@ class MyWebSocketConsumer(
 
         players = await self.get_players()
 
-        # Already connected
+        # --------------------------------------------------------------
+        # Lobby full — this check is based on distinct players, not
+        # connections, so a reconnecting player never gets blocked here.
+        # --------------------------------------------------------------
 
-        if self.player_id in players:
+        already_seated = self.player_id in players
 
-            await self.close(
-                code=4002
-            )
-
-            return
-
-        # Lobby full
-
-        if len(players) >= MAX_PLAYERS:
+        if not already_seated and len(players) >= MAX_PLAYERS:
 
             await self.accept()
 
@@ -96,7 +106,43 @@ class MyWebSocketConsumer(
             return
 
         # --------------------------------------------------------------
-        # Add player to game environment
+        # Evict any previous socket for this player_id BEFORE we accept
+        # this one. This replaces the old "already connected -> reject
+        # the new socket" behavior, which is what caused reloads to
+        # sometimes get closed before ever receiving resume data.
+        # --------------------------------------------------------------
+
+        channels_map = await self.get_channels_map()
+
+        previous_channel = channels_map.get(
+            self.player_id
+        )
+
+        if (
+            previous_channel
+            and previous_channel != self.channel_name
+        ):
+
+            # Ask the old socket to close itself. Its disconnect() will
+            # still run, but it will see that it's no longer the
+            # authoritative channel (checked in disconnect() below) and
+            # will skip removing state that this new connection owns.
+
+            await self.channel_layer.send(
+                previous_channel,
+                {"type": "force_disconnect"},
+            )
+
+        # This connection is now authoritative for this player_id.
+
+        channels_map[self.player_id] = self.channel_name
+
+        await self.set_channels_map(
+            channels_map
+        )
+
+        # --------------------------------------------------------------
+        # Accept and join the group
         # --------------------------------------------------------------
 
         await self.channel_layer.group_add(
@@ -110,9 +156,40 @@ class MyWebSocketConsumer(
             "type": "connection",
             "message": "WebSocket connection established",
             "player_id": self.player_id,
-            "player_count": len(players) + 1,
+            "player_count": len(players) + (
+                0 if already_seated else 1
+            ),
             "max_players": MAX_PLAYERS,
         })
+
+        # --------------------------------------------------------------
+        # RESUME: if a game is already in progress and this player has
+        # a seat (e.g. they reloaded the page), replay everything they
+        # need to rebuild their UI — role, challenge, phase, votes,
+        # etc. This is sent only to the reconnecting socket, never
+        # broadcast, since it can contain their private role/challenge.
+        # --------------------------------------------------------------
+
+        resume = await sync_to_async(
+            self.game.get_resume_payload
+        )(self.player_id)
+
+        if resume:
+
+            await self.send_json({
+                "type": "game_resumed",
+                **resume,
+            })
+
+
+    # ==================================================================
+    # FORCED DISCONNECT (sent to a socket that's been superseded by a
+    # newer connection for the same player_id — e.g. a page reload)
+    # ==================================================================
+
+    async def force_disconnect(self, event):
+
+        await self.close(code=4004)
 
 
     # ==================================================================
@@ -262,7 +339,10 @@ class MyWebSocketConsumer(
         )
 
         # Also synchronize player
-        # with GameEnvironment
+        # with GameEnvironment.
+        # add_player() is reconnect-safe: if this player already has
+        # a seat (mid-game reload), it just updates name/location and
+        # leaves their role/score untouched.
 
         await sync_to_async(
             self.game.add_player
@@ -572,11 +652,20 @@ class MyWebSocketConsumer(
                 "player_id":
                     self.player_id,
 
+                "vote":
+                    vote,
+
                 "complete":
                     consensus["complete"],
 
-                "unanimous":
-                    consensus["unanimous"],
+                "majority":
+                    consensus.get("majority", False),
+
+                "votes_cast":
+                    consensus["votes_cast"],
+
+                "total":
+                    consensus["total"],
             }
         )
 
@@ -593,11 +682,20 @@ class MyWebSocketConsumer(
             "player_id":
                 event["player_id"],
 
+            "vote":
+                event.get("vote"),
+
             "complete":
                 event["complete"],
 
-            "unanimous":
-                event["unanimous"],
+            "majority":
+                event.get("majority", False),
+
+            "votes_cast":
+                event.get("votes_cast"),
+
+            "total":
+                event.get("total"),
         })
 
 
@@ -814,6 +912,58 @@ class MyWebSocketConsumer(
         if not self.player_id:
             return
 
+        # ------------------------------------------------------------------
+        # CRITICAL: only the socket that is still the AUTHORITATIVE
+        # channel for this player_id is allowed to remove state.
+        #
+        # Without this guard, a reload sequence like:
+        #   1. old socket starts closing (slow)
+        #   2. new socket connects, becomes authoritative, sends resume
+        #   3. old socket's disconnect() finally runs
+        # would let step 3 pop the player from the cache / broadcast
+        # "player_left" / touch GameEnvironment even though a perfectly
+        # good new connection has already taken over — silently undoing
+        # the reconnect. Checking the channels map here makes stale
+        # disconnects a true no-op.
+        # ------------------------------------------------------------------
+
+        channels_map = await self.get_channels_map()
+
+        current_owner = channels_map.get(
+            self.player_id
+        )
+
+        is_stale = (
+            current_owner is not None
+            and current_owner != self.channel_name
+        )
+
+        if hasattr(self, "group_name"):
+
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+
+        if is_stale:
+            # A newer connection already superseded this one — it owns
+            # cleanup duties now. Nothing more to do.
+            return
+
+        # This socket was (or still is) authoritative for the player,
+        # so it's safe — and correct — to actually clean up.
+
+        if current_owner == self.channel_name:
+
+            channels_map.pop(
+                self.player_id,
+                None
+            )
+
+            await self.set_channels_map(
+                channels_map
+            )
+
         players = await self.get_players()
 
         player = players.pop(
@@ -829,22 +979,18 @@ class MyWebSocketConsumer(
 
             if self.game:
 
+                # remove_player() is reconnect-safe: while the game is
+                # "playing", it deliberately keeps this player's role
+                # and score intact in the GameEnvironment, since a
+                # disconnect here might still be a reload rather than
+                # an intentional quit. It only actually clears the seat
+                # while the lobby is still "waiting".
+
                 await sync_to_async(
                     self.game.remove_player
                 )(
                     self.player_id
                 )
-
-
-        if hasattr(self, "group_name"):
-
-            await self.channel_layer.group_discard(
-                self.group_name,
-                self.channel_name
-            )
-
-
-        if player:
 
             await self.channel_layer.group_send(
                 self.group_name,
@@ -912,5 +1058,27 @@ class MyWebSocketConsumer(
         cache.set(
             self.cache_key,
             players,
+            timeout=PLAYER_CACHE_TIMEOUT
+        )
+
+
+    @sync_to_async
+    def get_channels_map(self):
+
+        return cache.get(
+            self.channels_cache_key,
+            {}
+        )
+
+
+    @sync_to_async
+    def set_channels_map(
+        self,
+        channels_map
+    ):
+
+        cache.set(
+            self.channels_cache_key,
+            channels_map,
             timeout=PLAYER_CACHE_TIMEOUT
         )

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import useWebSocket from "../hooks/useWebsocket";
 
 
@@ -5,7 +6,8 @@ function handleLobbyMessage(
     data,
     setPlayers,
     setLobbyInfo,
-    setGameState
+    setGameState,
+    ownPlayerIdRef
 ) {
     switch (data.type) {
 
@@ -14,6 +16,11 @@ function handleLobbyMessage(
         // ------------------------------------------------------------
 
         case "connection":
+
+            // Remember our own player_id so later messages (like
+            // vote_submitted) can tell "my vote" apart from everyone
+            // else's without needing extra React state.
+            ownPlayerIdRef.current = data.player_id;
 
             setLobbyInfo((prev) => ({
                 ...prev,
@@ -129,7 +136,7 @@ function handleLobbyMessage(
 
 
         // ------------------------------------------------------------
-        // GAME STATE (new)
+        // GAME STATE
         // ------------------------------------------------------------
 
         case "game_started":
@@ -143,8 +150,11 @@ function handleLobbyMessage(
                 role: data.role,
                 challenge: data.challenge,
                 votes: {},
+                myVote: null,
+                votesCast: 0,
                 voteComplete: false,
-                voteUnanimous: false,
+                voteMajority: false,
+                evidenceLog: [],
                 lastRoundResult: null,
                 finalResult: null,
                 error: null,
@@ -153,11 +163,79 @@ function handleLobbyMessage(
             break;
 
 
+        // --------------------------------------------------------
+        // RESUME: sent only to the reconnecting socket right after
+        // connect(), when a game is already in progress and this
+        // player already has a seat (e.g. they reloaded the page).
+        // Restores everything DEFAULT_GAME_STATE would otherwise
+        // have wiped: status, round, phase, announcement, role,
+        // challenge, votes, vote progress, and the last round
+        // result / final result if applicable.
+        // --------------------------------------------------------
+
+        case "game_resumed": {
+
+            const ownId = ownPlayerIdRef.current;
+
+            const myVote =
+                ownId != null &&
+                data.votes &&
+                Object.prototype.hasOwnProperty.call(
+                    data.votes,
+                    ownId
+                )
+                    ? data.votes[ownId]
+                    : null;
+
+            setGameState((prev) => ({
+                ...prev,
+                status: data.status,
+                round: data.round,
+                phase: data.phase,
+                announcement: data.announcement,
+                role: data.role,
+                challenge: data.challenge,
+                votes: data.votes || {},
+                myVote,
+                votesCast: data.votes_cast ?? 0,
+                voteComplete:
+                    data.phase === "consensus"
+                        ? (data.votes_cast ?? 0) >=
+                          (data.player_count ?? 0)
+                        : prev.voteComplete,
+                lastRoundResult:
+                    data.last_round_result ?? null,
+                finalResult: data.final_result ?? null,
+                error: null,
+            }));
+
+            setLobbyInfo((prev) => ({
+                ...prev,
+                playerCount:
+                    data.player_count ?? prev.playerCount,
+            }));
+
+            break;
+        }
+
+
         case "phase_changed":
 
             setGameState((prev) => ({
                 ...prev,
                 phase: data.phase,
+
+                // Entering a fresh voting round should clear out
+                // whatever vote state was left over from before.
+                ...(data.phase === "consensus"
+                    ? {
+                          votes: {},
+                          myVote: null,
+                          votesCast: 0,
+                          voteComplete: false,
+                          voteMajority: false,
+                      }
+                    : {}),
             }));
 
             break;
@@ -179,19 +257,32 @@ function handleLobbyMessage(
             break;
 
 
-        case "vote_submitted":
+        case "vote_submitted": {
+
+            const ownId = ownPlayerIdRef.current;
+
+            const isOwnVote =
+                ownId != null &&
+                String(data.player_id) === String(ownId);
 
             setGameState((prev) => ({
                 ...prev,
                 votes: {
                     ...prev.votes,
-                    [data.player_id]: true,
+                    [data.player_id]: data.vote ?? true,
                 },
+                myVote: isOwnVote
+                    ? data.vote ?? prev.myVote
+                    : prev.myVote,
+                votesCast:
+                    data.votes_cast ??
+                    Object.keys(prev.votes || {}).length + 1,
                 voteComplete: data.complete,
-                voteUnanimous: data.unanimous,
+                voteMajority: data.majority,
             }));
 
             break;
+        }
 
 
         case "round_finished":
@@ -212,8 +303,10 @@ function handleLobbyMessage(
                 phase: data.phase,
                 announcement: data.announcement,
                 votes: {},
+                myVote: null,
+                votesCast: 0,
                 voteComplete: false,
-                voteUnanimous: false,
+                voteMajority: false,
                 evidenceLog: [],
                 lastRoundResult: null,
             }));
@@ -261,6 +354,11 @@ export default function lobbyListener(
     setGameState
 ) {
 
+    // Holds this client's own player_id once the "connection" message
+    // arrives, so later per-player messages (vote_submitted, etc.) can
+    // be checked against "is this me?" without extra re-renders.
+    const ownPlayerIdRef = useRef(null);
+
     const {
         sendMessage,
         connected,
@@ -290,7 +388,8 @@ export default function lobbyListener(
                     data,
                     setPlayers,
                     setLobbyInfo,
-                    setGameState
+                    setGameState,
+                    ownPlayerIdRef
                 );
             },
         }

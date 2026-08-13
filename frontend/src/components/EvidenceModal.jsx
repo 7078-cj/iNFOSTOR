@@ -4,13 +4,18 @@ import investigationContent from "../data/investigationContent";
 const OBJECT_LABELS = {
     library: "Library",
     tv: "TV",
+    bulletin: "Noticeboard",
+    radio: "Radio",
     computer: "Computer",
 };
 
 /**
- * objectId: "library" | "tv" | "computer"
+ * objectId: "library" | "tv" | "bulletin" | "radio" | "computer"
  * announcementId: current round's announcement.id from game state
- * challenge: { title, instructions } for the local player (from game_started/state)
+ * challenge: { title, instructions } for the local player (from game state)
+ * playerRole: the local player's role string (e.g. "Data Analyst"), used
+ *             only to show a soft "relevant to you" hint — never reveals
+ *             whether the source is trustworthy.
  * onClose: () => void
  * onSubmitEvidence: (evidenceText: string) => void  -> sends `submit_evidence`
  */
@@ -18,12 +23,17 @@ export default function EvidenceModal({
     objectId,
     announcementId,
     challenge,
+    playerRole,
     onClose,
     onSubmitEvidence,
 }) {
     if (!objectId) return null;
 
     const content = investigationContent[announcementId]?.[objectId];
+
+    const relevantToPlayer =
+        playerRole &&
+        content?.bestFor?.includes(playerRole);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -42,12 +52,18 @@ export default function EvidenceModal({
                 </div>
 
                 {challenge && (
-                    <div className="mb-4 rounded bg-white/5 p-2 text-xs text-slate-400">
+                    <div className="mb-2 rounded bg-white/5 p-2 text-xs text-slate-400">
                         <span className="font-semibold text-slate-300">
                             Your task:{" "}
                         </span>
                         {challenge.title ? `${challenge.title} — ` : ""}
                         {challenge.instructions}
+                    </div>
+                )}
+
+                {relevantToPlayer && (
+                    <div className="mb-4 rounded bg-emerald-900/40 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-emerald-300">
+                        This looks worth checking for your role
                     </div>
                 )}
 
@@ -58,16 +74,41 @@ export default function EvidenceModal({
                 )}
 
                 {content && objectId === "library" && (
-                    <LibraryContent
-                        content={content}
+                    <PassageContent
+                        title={content.title}
+                        text={content.passage}
+                        source="library"
                         onSubmitEvidence={onSubmitEvidence}
                         onClose={onClose}
                     />
                 )}
 
                 {content && objectId === "tv" && (
-                    <TVContent
-                        content={content}
+                    <BroadcastContent
+                        title={content.title}
+                        text={content.broadcast}
+                        source="tv"
+                        mono
+                        onSubmitEvidence={onSubmitEvidence}
+                        onClose={onClose}
+                    />
+                )}
+
+                {content && objectId === "bulletin" && (
+                    <PassageContent
+                        title={content.title}
+                        text={content.notice}
+                        source="bulletin"
+                        onSubmitEvidence={onSubmitEvidence}
+                        onClose={onClose}
+                    />
+                )}
+
+                {content && objectId === "radio" && (
+                    <BroadcastContent
+                        title={content.title}
+                        text={content.broadcast}
+                        source="radio"
                         onSubmitEvidence={onSubmitEvidence}
                         onClose={onClose}
                     />
@@ -85,20 +126,17 @@ export default function EvidenceModal({
     );
 }
 
-function LibraryContent({ content, onSubmitEvidence, onClose }) {
+function PassageContent({ title, text, source, onSubmitEvidence, onClose }) {
     return (
         <div>
-            <h3 className="mb-2 text-base font-semibold">{content.title}</h3>
+            <h3 className="mb-2 text-base font-semibold">{title}</h3>
             <p className="mb-4 text-sm leading-relaxed text-slate-300">
-                {content.passage}
+                {text}
             </p>
 
             <SubmitEvidenceButton
                 onClick={() => {
-                    onSubmitEvidence({
-                        source: "library",
-                        note: content.passage,
-                    });
+                    onSubmitEvidence({ source, note: text });
                     onClose();
                 }}
             />
@@ -106,21 +144,31 @@ function LibraryContent({ content, onSubmitEvidence, onClose }) {
     );
 }
 
-function TVContent({ content, onSubmitEvidence, onClose }) {
+function BroadcastContent({
+    title,
+    text,
+    source,
+    mono = false,
+    onSubmitEvidence,
+    onClose,
+}) {
     return (
         <div>
-            <h3 className="mb-2 text-base font-semibold">{content.title}</h3>
+            <h3 className="mb-2 text-base font-semibold">{title}</h3>
 
-            <div className="mb-4 rounded border border-white/10 bg-black p-3 font-mono text-sm text-green-400">
-                {content.broadcast}
+            <div
+                className={`mb-4 rounded border border-white/10 bg-black p-3 text-sm ${
+                    mono
+                        ? "font-mono text-green-400"
+                        : "text-amber-300"
+                }`}
+            >
+                {text}
             </div>
 
             <SubmitEvidenceButton
                 onClick={() => {
-                    onSubmitEvidence({
-                        source: "tv",
-                        note: content.broadcast,
-                    });
+                    onSubmitEvidence({ source, note: text });
                     onClose();
                 }}
             />

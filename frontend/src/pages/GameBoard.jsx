@@ -14,7 +14,10 @@ import OtherPlayer from "../components/OtherPlayer";
 import Library from "../components/interactables/Library";
 import TV from "../components/interactables/TV";
 import Computer from "../components/interactables/Computer";
+import Radio from "../components/interactables/Radio";
+import Bulletin from "../components/interactables/Bulletin";
 import EvidenceModal from "../components/EvidenceModal";
+import VoteModal from "../components/VoteModal";
 
 import useWindowSize from "../hooks/useWindowSize";
 import lobbyListener from "../listener/lobbyListener";
@@ -35,13 +38,52 @@ const DEFAULT_GAME_STATE = {
     role: null,
     challenge: null,
     votes: {},
+    myVote: null,
+    votesCast: 0,
     voteComplete: false,
-    voteUnanimous: false,
+    voteMajority: false,
     evidenceLog: [],
     lastRoundResult: null,
     finalResult: null,
     error: null,
 };
+
+
+/*
+|--------------------------------------------------------------------------
+| NOTE ON lobbyListener.js
+|--------------------------------------------------------------------------
+| This component expects lobbyListener's setGameState updater to handle
+| the following incoming websocket message types (merging fields into
+| gameState the same way it already does for "game_started"):
+|
+|   "game_resumed"        -> sent ONLY to the reconnecting socket right
+|                             after connect(), replays status/round/phase/
+|                             announcement/role/challenge/votes/votes_cast/
+|                             player_count/last_round_result/final_result
+|                             so a page reload mid-game restores the UI
+|                             instead of falling back to DEFAULT_GAME_STATE.
+|
+|   "phase_changed"        -> merge { phase }, and reset myVote/voteComplete
+|                             when phase becomes "consensus".
+|
+|   "vote_submitted"       -> merge { votesCast: votes_cast, voteComplete:
+|                             complete, voteMajority: majority }, and if
+|                             player_id === own id, set myVote = vote.
+|
+|   "round_finished"       -> merge { lastRoundResult: result }.
+|
+|   "next_round"           -> merge { round, phase, announcement,
+|                             lastRoundResult: null, votes: {}, myVote: null,
+|                             votesCast: 0, voteComplete: false }.
+|
+|   "game_finished"        -> merge { finalResult: result }.
+|
+|   "evidence_submitted"   -> append to evidenceLog.
+|
+| These mirror the backend broadcast shapes added in consumers.py.
+|--------------------------------------------------------------------------
+*/
 
 
 export default function GameBoard() {
@@ -198,6 +240,56 @@ export default function GameBoard() {
                 w: 200,
                 h: 30,
             },
+
+            // ---- Additional room-forming walls ----
+
+            {
+                id: "wall-library-room-a",
+                x: WORLD_W / 2 - 650,
+                y: WORLD_H / 2 - 220,
+                w: 30,
+                h: 260,
+            },
+
+            {
+                id: "wall-library-room-b",
+                x: WORLD_W / 2 - 650,
+                y: WORLD_H / 2 - 220,
+                w: 220,
+                h: 30,
+            },
+
+            {
+                id: "wall-tech-room-a",
+                x: WORLD_W / 2 + 380,
+                y: WORLD_H / 2 - 340,
+                w: 30,
+                h: 220,
+            },
+
+            {
+                id: "wall-tech-room-b",
+                x: WORLD_W / 2 + 380,
+                y: WORLD_H / 2 - 340,
+                w: 220,
+                h: 30,
+            },
+
+            {
+                id: "wall-newsroom-a",
+                x: WORLD_W / 2 - 620,
+                y: WORLD_H / 2 + 260,
+                w: 260,
+                h: 30,
+            },
+
+            {
+                id: "wall-newsroom-b",
+                x: WORLD_W / 2 - 620,
+                y: WORLD_H / 2 + 260,
+                w: 30,
+                h: 200,
+            },
         ],
         []
     );
@@ -223,7 +315,8 @@ export default function GameBoard() {
 
     /*
     |--------------------------------------------------------------------------
-    | Investigation Objects — Library / TV / Computer
+    | Investigation Objects — Library / TV / Computer / Radio / Bulletin
+    | plus new props to make the map feel bigger and more purposeful.
     |--------------------------------------------------------------------------
     */
 
@@ -252,6 +345,49 @@ export default function GameBoard() {
                 w: 38,
                 h: 32,
                 Component: Computer,
+            },
+            {
+                id: "radio",
+                x: WORLD_W / 2 - 550,
+                y: WORLD_H / 2 + 350,
+                w: 34,
+                h: 30,
+                Component: Radio,
+            },
+            {
+                id: "bulletin",
+                x: WORLD_W / 2 + 500,
+                y: WORLD_H / 2 + 300,
+                w: 40,
+                h: 34,
+                Component: Bulletin,
+            },
+
+            // ---- New props (extra environment / investigation spots) ----
+
+            {
+                id: "newsdesk",
+                x: WORLD_W / 2 - 700,
+                y: WORLD_H / 2 - 350,
+                w: 42,
+                h: 34,
+                Component: Bulletin,
+            },
+            {
+                id: "archive-computer",
+                x: WORLD_W / 2 + 520,
+                y: WORLD_H / 2 - 400,
+                w: 38,
+                h: 32,
+                Component: Computer,
+            },
+            {
+                id: "second-radio",
+                x: WORLD_W / 2 - 700,
+                y: WORLD_H / 2 + 400,
+                w: 34,
+                h: 30,
+                Component: Radio,
             },
         ],
         []
@@ -373,8 +509,15 @@ export default function GameBoard() {
         sendMessage({ action: "start_game" });
     }, [sendMessage]);
 
+    const handleCallVote = useCallback(() => {
+        sendMessage({ action: "set_phase", phase: "consensus" });
+    }, [sendMessage]);
+
     const handleVote = useCallback(
         (vote) => {
+            // Optimistically lock the buttons for this player while
+            // waiting for the broadcast to confirm.
+            setGameState((prev) => ({ ...prev, myVote: vote }));
             sendMessage({ action: "vote", vote });
         },
         [sendMessage]
@@ -405,6 +548,20 @@ export default function GameBoard() {
 
 
     const activeChallenge = gameState.challenge;
+
+    // The vote modal is open for everyone the moment the phase enters
+    // "consensus", and closes automatically once this player's own
+    // vote has been recorded and the round is fully resolved.
+    const voteModalOpen =
+        gameState.status === "playing" &&
+        gameState.phase === "consensus" &&
+        !gameState.lastRoundResult;
+
+    const canCallVote =
+        gameState.status === "playing" &&
+        gameState.phase !== "consensus" &&
+        gameState.phase !== "result" &&
+        !gameState.lastRoundResult;
 
 
     /*
@@ -497,27 +654,37 @@ export default function GameBoard() {
 
 
             {/* ------------------------------------------------------------- */}
-            {/* Vote / Round Controls */}
+            {/* Call a Vote */}
             {/* ------------------------------------------------------------- */}
 
-            {gameState.phase === "consensus" && (
-                <div className="absolute bottom-6 right-6 z-10 flex gap-2">
-                    <button
-                        onClick={() => handleVote("FLAG")}
-                        className="rounded bg-red-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-red-600"
-                    >
-                        Flag
-                    </button>
-                    <button
-                        onClick={() =>
-                            handleVote("CONTINUE_INVESTIGATION")
-                        }
-                        className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-slate-600"
-                    >
-                        Keep Investigating
-                    </button>
-                </div>
+            {canCallVote && (
+                <button
+                    onClick={handleCallVote}
+                    className="absolute bottom-6 right-6 z-10 rounded bg-red-800 px-3 py-1.5 text-xs font-medium uppercase tracking-wide hover:bg-red-700"
+                >
+                    Call a Vote
+                </button>
             )}
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Vote Modal — shown to ALL players once phase = consensus */}
+            {/* ------------------------------------------------------------- */}
+
+            <VoteModal
+                open={voteModalOpen}
+                announcement={gameState.announcement}
+                evidenceLog={gameState.evidenceLog}
+                myVote={gameState.myVote}
+                votesCast={gameState.votesCast}
+                totalPlayers={lobbyInfo.playerCount}
+                onVote={handleVote}
+            />
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Reveal Result (once voting is complete) */}
+            {/* ------------------------------------------------------------- */}
 
             {gameState.voteComplete && !gameState.lastRoundResult && (
                 <button
@@ -695,6 +862,7 @@ export default function GameBoard() {
                 objectId={activeObjectId}
                 announcementId={gameState.announcement?.id}
                 challenge={activeChallenge}
+                playerRole={gameState.role}
                 onClose={handleCloseModal}
                 onSubmitEvidence={handleSubmitEvidence}
             />

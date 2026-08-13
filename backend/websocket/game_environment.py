@@ -107,6 +107,40 @@ class GameEnvironment:
                 "sources."
             ),
         },
+
+        {
+            "id": 4,
+            "title": "Flood Photo Announcement",
+            "content": (
+                "SHARE THIS NOW: Photo shows the town plaza already "
+                "underwater because of today's heavy rain. Evacuate "
+                "while you still can!"
+            ),
+            "classification": "OUT_OF_CONTEXT",
+            "explanation": (
+                "The photo is real, but it was taken during a flood "
+                "in a different province three years ago and has "
+                "nothing to do with today's weather."
+            ),
+        },
+
+        {
+            "id": 5,
+            "title": "Crime Rate Announcement",
+            "content": (
+                "Crime in our town has skyrocketed by 300% this year, "
+                "according to a new report. Our streets are no longer "
+                "safe."
+            ),
+            "classification": "MISLEADING",
+            "explanation": (
+                "The '300%' figure is technically correct but "
+                "compares a very small baseline (2 incidents to 8), "
+                "and ignores that overall crime for the year is flat. "
+                "The statistic is accurate but presented without "
+                "context to appear alarming."
+            ),
+        },
     ]
 
     def __init__(self, lobby_id):
@@ -165,6 +199,8 @@ class GameEnvironment:
 
             "votes": {},
 
+            "ready_players": [],
+
             "round_results": [],
 
             "scores": {},
@@ -184,11 +220,36 @@ class GameEnvironment:
 
         player_id = str(player["id"])
 
+        # --------------------------------------------------------------
+        # Reconnect case: player already exists in the GameEnvironment
+        # (e.g. game is in progress and they refreshed the page). Don't
+        # clobber their role/score — just update their display info.
+        # --------------------------------------------------------------
+
         if player_id in players:
-            return False, "Player is already in the game."
+
+            existing = players[player_id]
+
+            existing["name"] = player["name"]
+
+            existing["location"] = player.get(
+                "location",
+                existing.get(
+                    "location",
+                    {"x": 0, "y": 0},
+                )
+            )
+
+            self.save_state(state)
+
+            return True, state
 
         if len(players) >= MAX_PLAYERS:
             return False, "Game is full."
+
+        if state["status"] == "playing":
+            # Game already started — no seats for brand new players.
+            return False, "Game has already started."
 
         players[player_id] = {
             "id": player_id,
@@ -215,11 +276,28 @@ class GameEnvironment:
         return True, state
 
 
-    def remove_player(self, player_id):
+    def remove_player(self, player_id, force=False):
+        """
+        Remove a player from the game.
+
+        During an active game (status == "playing"), a disconnect is
+        very likely just a page reload / dropped socket — not the
+        player quitting. Wiping their role and score in that case is
+        what causes "reload = lost your role" bugs. So while a game is
+        playing, we keep their seat intact unless `force=True` is
+        passed explicitly (e.g. a genuine "leave game" action).
+
+        While still in the lobby ("waiting"), disconnecting really
+        does mean they're gone, so we remove them normally.
+        """
 
         state = self.get_state()
 
         player_id = str(player_id)
+
+        if state["status"] == "playing" and not force:
+            # Keep player/role/score. Nothing to do.
+            return state
 
         state["players"].pop(
             player_id,
@@ -246,6 +324,64 @@ class GameEnvironment:
         return len(
             state["players"]
         )
+
+
+    # ==================================================================
+    # RESUME (for reconnects mid-game)
+    # ==================================================================
+
+    def get_resume_payload(self, player_id):
+        """
+        Build the payload a reconnecting client needs to rebuild its
+        UI without waiting for the next broadcast event. Returns None
+        if there's nothing to resume (no game started yet, or the
+        player has no record — e.g. they were never actually seated).
+        """
+
+        state = self.get_state()
+
+        player_id = str(player_id)
+
+        player = state["players"].get(player_id)
+
+        if not player or state["status"] == "waiting":
+            return None
+
+        votes = state["votes"]
+
+        return {
+            "status": state["status"],
+
+            "round": state["round"],
+
+            "phase": state["phase"],
+
+            "announcement": state["announcement"],
+
+            "role": player["role"],
+
+            "challenge": state["challenges"].get(player_id),
+
+            "evidence": state["evidence"],
+
+            "votes": votes,
+
+            "votes_cast": len(votes),
+
+            "player_count": len(state["players"]),
+
+            "last_round_result": (
+                state["round_results"][-1]
+                if state["round_results"]
+                else None
+            ),
+
+            "final_result": (
+                self.get_final_result()
+                if state["status"] == "finished"
+                else None
+            ),
+        }
 
 
     # ==================================================================
@@ -326,7 +462,7 @@ class GameEnvironment:
                     "title": "Disrupt the investigation",
                     "instructions": (
                         "Prevent the group from reaching "
-                        "a correct unanimous decision. "
+                        "a correct majority decision. "
                         "Question valid evidence and "
                         "defend questionable information."
                     ),
@@ -353,6 +489,8 @@ class GameEnvironment:
         )
 
         state["votes"] = {}
+
+        state["ready_players"] = []
 
         state["evidence"] = {}
 
@@ -488,6 +626,12 @@ class GameEnvironment:
 
         state["phase"] = phase
 
+        # Entering the consensus/voting phase should start with a
+        # clean ballot, in case this round's votes were somehow
+        # already populated (e.g. a phase re-trigger).
+        if phase == "consensus":
+            state["votes"] = {}
+
         self.save_state(state)
 
         return state
@@ -510,6 +654,9 @@ class GameEnvironment:
         if player_id not in state["players"]:
             return False, "Player does not exist."
 
+        if state["phase"] != "consensus":
+            return False, "Voting is not open right now."
+
         if vote not in [
             "FLAG",
             "CONTINUE_INVESTIGATION",
@@ -524,6 +671,14 @@ class GameEnvironment:
 
 
     def check_consensus(self):
+        """
+        A round resolves by MAJORITY, not unanimity.
+
+        - With 2 players, a majority requires both to agree (1/2 is a
+          tie, not a majority), which is the "auto-decide based on
+          evidence when only 2 players" behavior.
+        - With 3+ players, more than half voting FLAG succeeds.
+        """
 
         state = self.get_state()
 
@@ -531,21 +686,32 @@ class GameEnvironment:
 
         votes = state["votes"]
 
-        if len(votes) != len(players):
+        total = len(players)
+
+        votes_cast = len(votes)
+
+        if votes_cast != total:
             return {
                 "complete": False,
-                "unanimous": False,
+                "majority": False,
+                "votes_cast": votes_cast,
+                "total": total,
             }
 
-        unanimous_flag = all(
-            vote == "FLAG"
+        flag_votes = sum(
+            1
             for vote in votes.values()
+            if vote == "FLAG"
         )
+
+        majority = flag_votes > (total / 2)
 
         return {
             "complete": True,
-            "unanimous": unanimous_flag,
+            "majority": majority,
             "votes": votes,
+            "votes_cast": votes_cast,
+            "total": total,
         }
 
 
@@ -570,11 +736,11 @@ class GameEnvironment:
             announcement["classification"]
         )
 
-        # For the MVP, any unanimous FLAG
-        # is considered a successful investigation.
+        # A round is a successful investigation if a majority voted
+        # to FLAG the announcement.
 
         successful = (
-            consensus["unanimous"]
+            consensus["majority"]
         )
 
         result = {
@@ -613,6 +779,8 @@ class GameEnvironment:
                     state["scores"][
                         player_id
                     ] += 1
+
+        state["phase"] = "result"
 
         self.save_state(state)
 
