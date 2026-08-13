@@ -41,10 +41,12 @@ const DEFAULT_GAME_STATE = {
     myVote: null,
     votesCast: 0,
     voteComplete: false,
-    voteMajority: false,
     evidenceLog: [],
     lastRoundResult: null,
+    lastRoundNote: null,
     finalResult: null,
+    score: 0,
+    requiredScore: null,
     error: null,
 };
 
@@ -60,22 +62,43 @@ const DEFAULT_GAME_STATE = {
 |   "game_resumed"        -> sent ONLY to the reconnecting socket right
 |                             after connect(), replays status/round/phase/
 |                             announcement/role/challenge/votes/votes_cast/
-|                             player_count/last_round_result/final_result
-|                             so a page reload mid-game restores the UI
-|                             instead of falling back to DEFAULT_GAME_STATE.
+|                             player_count/investigator_score/required_score/
+|                             last_round_result/final_result so a page
+|                             reload mid-game restores the UI instead of
+|                             falling back to DEFAULT_GAME_STATE.
 |
 |   "phase_changed"        -> merge { phase }, and reset myVote/voteComplete
 |                             when phase becomes "consensus".
 |
 |   "vote_submitted"       -> merge { votesCast: votes_cast, voteComplete:
-|                             complete, voteMajority: majority }, and if
-|                             player_id === own id, set myVote = vote.
+|                             complete }. Does NOT set myVote — that's
+|                             already applied optimistically by
+|                             handleVote() below the instant the local
+|                             player votes.
 |
-|   "round_finished"       -> merge { lastRoundResult: result }.
+|   "vote_inconclusive"    -> sent instead of "round_finished" when the
+|                             final vote comes in but nobody reached a
+|                             strict majority for a real classification.
+|                             Server auto-resets phase back to
+|                             "investigation" and clears votes; merge
+|                             { phase, votes: {}, myVote: null,
+|                             votesCast: 0, voteComplete: false,
+|                             lastRoundNote: { type: "inconclusive",
+|                             tally } } so the vote modal closes and the
+|                             group can gather more evidence.
+|
+|   "round_finished"       -> now sent automatically the instant the last
+|                             vote comes in AND a majority verdict was
+|                             reached (no "Reveal Result" button needed).
+|                             merge { lastRoundResult: result,
+|                             lastRoundNote: null, score:
+|                             result.investigator_score, requiredScore:
+|                             result.required_score }.
 |
 |   "next_round"           -> merge { round, phase, announcement,
-|                             lastRoundResult: null, votes: {}, myVote: null,
-|                             votesCast: 0, voteComplete: false }.
+|                             lastRoundResult: null, lastRoundNote: null,
+|                             votes: {}, myVote: null, votesCast: 0,
+|                             voteComplete: false }.
 |
 |   "game_finished"        -> merge { finalResult: result }.
 |
@@ -516,16 +539,14 @@ export default function GameBoard() {
     const handleVote = useCallback(
         (vote) => {
             // Optimistically lock the buttons for this player while
-            // waiting for the broadcast to confirm.
+            // waiting for the broadcast to confirm. The server auto-
+            // resolves the round the instant the last vote comes in,
+            // so there's no separate "submit"/"reveal" step to wire up.
             setGameState((prev) => ({ ...prev, myVote: vote }));
             sendMessage({ action: "vote", vote });
         },
         [sendMessage]
     );
-
-    const handleFinishRound = useCallback(() => {
-        sendMessage({ action: "finish_round" });
-    }, [sendMessage]);
 
     const handleNextRound = useCallback(() => {
         sendMessage({ action: "next_round" });
@@ -550,8 +571,9 @@ export default function GameBoard() {
     const activeChallenge = gameState.challenge;
 
     // The vote modal is open for everyone the moment the phase enters
-    // "consensus", and closes automatically once this player's own
-    // vote has been recorded and the round is fully resolved.
+    // "consensus", and closes automatically once the round resolves
+    // (lastRoundResult set) OR the round comes back inconclusive
+    // (server already reset phase away from "consensus" in that case).
     const voteModalOpen =
         gameState.status === "playing" &&
         gameState.phase === "consensus" &&
@@ -612,6 +634,12 @@ export default function GameBoard() {
                         <div className="text-amber-400">
                             Role: {gameState.role}
                         </div>
+                        {gameState.requiredScore != null && (
+                            <div className="text-emerald-400">
+                                Investigators: {gameState.score}/
+                                {gameState.requiredScore} to win
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -683,32 +711,42 @@ export default function GameBoard() {
 
 
             {/* ------------------------------------------------------------- */}
-            {/* Reveal Result (once voting is complete) */}
+            {/* Inconclusive Vote Note — round auto-reset, no majority reached */}
             {/* ------------------------------------------------------------- */}
 
-            {gameState.voteComplete && !gameState.lastRoundResult && (
-                <button
-                    onClick={handleFinishRound}
-                    className="absolute bottom-6 right-6 z-10 rounded bg-sky-700 px-3 py-1.5 text-xs font-medium uppercase hover:bg-sky-600"
-                >
-                    Reveal Result
-                </button>
+            {gameState.lastRoundNote?.type === "inconclusive" && (
+                <div className="absolute bottom-6 z-10 max-w-xs rounded border border-amber-500/30 bg-black/70 p-2 text-center text-xs text-amber-300">
+                    No majority reached — back to investigating.
+                </div>
             )}
+
+
+            {/* ------------------------------------------------------------- */}
+            {/* Round Result — round auto-resolves once everyone has voted */}
+            {/* ------------------------------------------------------------- */}
 
             {gameState.lastRoundResult && (
                 <div className="absolute bottom-20 right-6 z-10 max-w-xs rounded border border-white/10 bg-black/80 p-3 text-xs text-slate-200">
                     <div className="mb-1 font-semibold">
                         {gameState.lastRoundResult.successful
-                            ? "Investigation successful"
-                            : "Investigation failed"}
+                            ? "Correct verdict"
+                            : "Incorrect verdict"}
                     </div>
                     <div className="mb-1 text-slate-400">
-                        Verdict:{" "}
+                        Group voted:{" "}
+                        {gameState.lastRoundResult.verdict}
+                    </div>
+                    <div className="mb-1 text-slate-400">
+                        Actual classification:{" "}
                         {gameState.lastRoundResult.classification}
                     </div>
                     <p className="mb-2 text-slate-400">
                         {gameState.lastRoundResult.explanation}
                     </p>
+                    <div className="mb-2 text-emerald-400">
+                        Investigators: {gameState.score}/
+                        {gameState.requiredScore} to win
+                    </div>
                     <button
                         onClick={handleNextRound}
                         className="rounded bg-emerald-700 px-2 py-1 text-[11px] font-medium uppercase hover:bg-emerald-600"

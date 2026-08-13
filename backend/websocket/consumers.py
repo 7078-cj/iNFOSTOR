@@ -166,8 +166,9 @@ class MyWebSocketConsumer(
         # RESUME: if a game is already in progress and this player has
         # a seat (e.g. they reloaded the page), replay everything they
         # need to rebuild their UI — role, challenge, phase, votes,
-        # etc. This is sent only to the reconnecting socket, never
-        # broadcast, since it can contain their private role/challenge.
+        # score, etc. This is sent only to the reconnecting socket,
+        # never broadcast, since it can contain their private role/
+        # challenge.
         # --------------------------------------------------------------
 
         resume = await sync_to_async(
@@ -260,14 +261,6 @@ class MyWebSocketConsumer(
             await self.handle_vote(
                 data
             )
-
-        # --------------------------------------------------------------
-        # FINISH ROUND
-        # --------------------------------------------------------------
-
-        elif action == "finish_round":
-
-            await self.handle_finish_round()
 
         # --------------------------------------------------------------
         # NEXT ROUND
@@ -470,6 +463,16 @@ class MyWebSocketConsumer(
             game["announcement"]
         )
 
+        investigator_score = sum(
+            p["score"]
+            for p in game["players"].values()
+            if p["role"] != "Imposter"
+        )
+
+        required_score = (
+            game["max_rounds"] // 2
+        ) + 1
+
         await self.send_json({
 
             "type":
@@ -489,6 +492,12 @@ class MyWebSocketConsumer(
 
             "challenge":
                 my_challenge,
+
+            "investigator_score":
+                investigator_score,
+
+            "required_score":
+                required_score,
 
         })
 
@@ -643,6 +652,9 @@ class MyWebSocketConsumer(
             self.game.check_consensus
         )()
 
+        # Broadcast the vote itself so everyone's tally/progress updates
+        # immediately, regardless of whether this was the final vote.
+
         await self.channel_layer.group_send(
             self.group_name,
             {
@@ -658,9 +670,6 @@ class MyWebSocketConsumer(
                 "complete":
                     consensus["complete"],
 
-                "majority":
-                    consensus.get("majority", False),
-
                 "votes_cast":
                     consensus["votes_cast"],
 
@@ -668,6 +677,47 @@ class MyWebSocketConsumer(
                     consensus["total"],
             }
         )
+
+        # ------------------------------------------------------------
+        # AUTO-RESOLVE: the moment everyone has voted, finish the round
+        # server-side — no "Reveal Result" button required.
+        # ------------------------------------------------------------
+
+        if not consensus["complete"]:
+            return
+
+        success, payload = await sync_to_async(
+            self.game.finish_round
+        )()
+
+        if not success:
+            return
+
+        if payload["inconclusive"]:
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type":
+                        "vote_inconclusive",
+
+                    "tally":
+                        payload["tally"],
+                }
+            )
+
+        else:
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type":
+                        "round_finished",
+
+                    "result":
+                        payload["result"],
+                }
+            )
 
 
     async def vote_submitted(
@@ -688,9 +738,6 @@ class MyWebSocketConsumer(
             "complete":
                 event["complete"],
 
-            "majority":
-                event.get("majority", False),
-
             "votes_cast":
                 event.get("votes_cast"),
 
@@ -699,43 +746,23 @@ class MyWebSocketConsumer(
         })
 
 
-    # ==================================================================
-    # FINISH ROUND
-    # ==================================================================
-
-    async def handle_finish_round(
-        self
+    async def vote_inconclusive(
+        self,
+        event
     ):
 
-        success, result = (
-            await sync_to_async(
-                self.game.finish_round
-            )()
-        )
+        await self.send_json({
+            "type":
+                "vote_inconclusive",
 
-        if not success:
+            "tally":
+                event["tally"],
+        })
 
-            await self.send_json({
-                "type":
-                    "game_error",
 
-                "message":
-                    result,
-            })
-
-            return
-
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type":
-                    "round_finished",
-
-                "result":
-                    result,
-            }
-        )
-
+    # ==================================================================
+    # ROUND FINISHED
+    # ==================================================================
 
     async def round_finished(
         self,

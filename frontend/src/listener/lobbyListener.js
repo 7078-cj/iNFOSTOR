@@ -153,10 +153,12 @@ function handleLobbyMessage(
                 myVote: null,
                 votesCast: 0,
                 voteComplete: false,
-                voteMajority: false,
                 evidenceLog: [],
                 lastRoundResult: null,
+                lastRoundNote: null,
                 finalResult: null,
+                score: data.investigator_score ?? 0,
+                requiredScore: data.required_score ?? null,
                 error: null,
             }));
 
@@ -169,8 +171,8 @@ function handleLobbyMessage(
         // player already has a seat (e.g. they reloaded the page).
         // Restores everything DEFAULT_GAME_STATE would otherwise
         // have wiped: status, round, phase, announcement, role,
-        // challenge, votes, vote progress, and the last round
-        // result / final result if applicable.
+        // challenge, votes, vote progress, score, and the last
+        // round result / final result if applicable.
         // --------------------------------------------------------
 
         case "game_resumed": {
@@ -201,8 +203,11 @@ function handleLobbyMessage(
                 voteComplete:
                     data.phase === "consensus"
                         ? (data.votes_cast ?? 0) >=
-                          (data.player_count ?? 0)
+                        (data.player_count ?? 0)
                         : prev.voteComplete,
+                score: data.investigator_score ?? prev.score,
+                requiredScore:
+                    data.required_score ?? prev.requiredScore,
                 lastRoundResult:
                     data.last_round_result ?? null,
                 finalResult: data.final_result ?? null,
@@ -233,7 +238,6 @@ function handleLobbyMessage(
                           myVote: null,
                           votesCast: 0,
                           voteComplete: false,
-                          voteMajority: false,
                       }
                     : {}),
             }));
@@ -259,37 +263,58 @@ function handleLobbyMessage(
 
         case "vote_submitted": {
 
-            const ownId = ownPlayerIdRef.current;
-
-            const isOwnVote =
-                ownId != null &&
-                String(data.player_id) === String(ownId);
-
             setGameState((prev) => ({
                 ...prev,
-                votes: {
-                    ...prev.votes,
-                    [data.player_id]: data.vote ?? true,
-                },
-                myVote: isOwnVote
-                    ? data.vote ?? prev.myVote
-                    : prev.myVote,
                 votesCast:
-                    data.votes_cast ??
-                    Object.keys(prev.votes || {}).length + 1,
+                    data.votes_cast ?? prev.votesCast,
                 voteComplete: data.complete,
-                voteMajority: data.majority,
             }));
 
             break;
         }
 
 
+        // --------------------------------------------------------
+        // INCONCLUSIVE: sent instead of "round_finished" when the
+        // final vote comes in but nobody reached a strict majority
+        // for a real classification. Server has already reset the
+        // phase back to "investigation" and cleared votes, so mirror
+        // that here and close the vote modal.
+        // --------------------------------------------------------
+
+        case "vote_inconclusive":
+
+            setGameState((prev) => ({
+                ...prev,
+                phase: "investigation",
+                votes: {},
+                myVote: null,
+                votesCast: 0,
+                voteComplete: false,
+                lastRoundNote: {
+                    type: "inconclusive",
+                    tally: data.tally,
+                },
+            }));
+
+            break;
+
+
+        // --------------------------------------------------------
+        // Sent automatically the instant the last vote comes in AND
+        // a majority verdict was reached — no manual "reveal" step.
+        // --------------------------------------------------------
+
         case "round_finished":
 
             setGameState((prev) => ({
                 ...prev,
                 lastRoundResult: data.result,
+                lastRoundNote: null,
+                score:
+                    data.result.investigator_score ?? prev.score,
+                requiredScore:
+                    data.result.required_score ?? prev.requiredScore,
             }));
 
             break;
@@ -306,9 +331,9 @@ function handleLobbyMessage(
                 myVote: null,
                 votesCast: 0,
                 voteComplete: false,
-                voteMajority: false,
                 evidenceLog: [],
                 lastRoundResult: null,
+                lastRoundNote: null,
             }));
 
             break;

@@ -327,6 +327,36 @@ class GameEnvironment:
 
 
     # ==================================================================
+    # SCORE SNAPSHOT (for live scoreboard, not just the final screen)
+    # ==================================================================
+
+    def get_score_snapshot(self):
+        """
+        Current investigator score vs. the score needed to win, usable
+        at any point mid-game — not just once the game has finished.
+        Only investigators ever accumulate points; the imposter's "win"
+        condition is investigators failing to reach `required` by the
+        time max_rounds runs out, not points of their own.
+        """
+
+        state = self.get_state()
+
+        investigator_scores = [
+            player["score"]
+            for player in state["players"].values()
+            if player["role"] != "Imposter"
+        ]
+
+        investigator_score = sum(investigator_scores)
+
+        required = (
+            state["max_rounds"] // 2
+        ) + 1
+
+        return investigator_score, required
+
+
+    # ==================================================================
     # RESUME (for reconnects mid-game)
     # ==================================================================
 
@@ -349,6 +379,10 @@ class GameEnvironment:
 
         votes = state["votes"]
 
+        investigator_score, required_score = (
+            self.get_score_snapshot()
+        )
+
         return {
             "status": state["status"],
 
@@ -369,6 +403,10 @@ class GameEnvironment:
             "votes_cast": len(votes),
 
             "player_count": len(state["players"]),
+
+            "investigator_score": investigator_score,
+
+            "required_score": required_score,
 
             "last_round_result": (
                 state["round_results"][-1]
@@ -641,6 +679,16 @@ class GameEnvironment:
     # VOTING
     # ==================================================================
 
+    # These must match the "classification" values used in ANNOUNCEMENTS
+    # exactly, since a round is scored by checking verdict == classification.
+    VALID_VOTES = [
+        "TRUE",
+        "MISLEADING",
+        "FALSE/HOAX",
+        "OUT_OF_CONTEXT",
+        "CONTINUE_INVESTIGATION",
+    ]
+
     def submit_vote(
         self,
         player_id,
@@ -657,10 +705,7 @@ class GameEnvironment:
         if state["phase"] != "consensus":
             return False, "Voting is not open right now."
 
-        if vote not in [
-            "FLAG",
-            "CONTINUE_INVESTIGATION",
-        ]:
+        if vote not in self.VALID_VOTES:
             return False, "Invalid vote."
 
         state["votes"][player_id] = vote
@@ -672,12 +717,13 @@ class GameEnvironment:
 
     def check_consensus(self):
         """
-        A round resolves by MAJORITY, not unanimity.
+        Five-way vote: TRUE / MISLEADING / FALSE/HOAX / OUT_OF_CONTEXT /
+        CONTINUE_INVESTIGATION.
 
-        - With 2 players, a majority requires both to agree (1/2 is a
-          tie, not a majority), which is the "auto-decide based on
-          evidence when only 2 players" behavior.
-        - With 3+ players, more than half voting FLAG succeeds.
+        The round only RESOLVES if one of the four real classification
+        options has a strict majority (> half of all players).
+        CONTINUE_INVESTIGATION winning, a tie, or a plurality that isn't
+        a majority all count as INCONCLUSIVE.
         """
 
         state = self.get_state()
@@ -693,23 +739,35 @@ class GameEnvironment:
         if votes_cast != total:
             return {
                 "complete": False,
-                "majority": False,
+                "resolved": False,
+                "verdict": None,
+                "tally": None,
                 "votes_cast": votes_cast,
                 "total": total,
             }
 
-        flag_votes = sum(
-            1
-            for vote in votes.values()
-            if vote == "FLAG"
+        tally = {option: 0 for option in self.VALID_VOTES}
+
+        for vote in votes.values():
+            if vote in tally:
+                tally[vote] += 1
+
+        leading_option, leading_count = max(
+            tally.items(), key=lambda kv: kv[1]
         )
 
-        majority = flag_votes > (total / 2)
+        has_majority = leading_count > (total / 2)
+
+        resolved = (
+            has_majority
+            and leading_option != "CONTINUE_INVESTIGATION"
+        )
 
         return {
             "complete": True,
-            "majority": majority,
-            "votes": votes,
+            "resolved": resolved,
+            "verdict": leading_option if resolved else None,
+            "tally": tally,
             "votes_cast": votes_cast,
             "total": total,
         }
@@ -720,6 +778,13 @@ class GameEnvironment:
     # ==================================================================
 
     def finish_round(self):
+        """
+        Called automatically the instant the last vote comes in.
+
+        Returns (True, payload) on success, where payload is either:
+          {"inconclusive": True, "tally": {...}}
+          {"inconclusive": False, "result": {...}}
+        """
 
         state = self.get_state()
 
@@ -728,63 +793,82 @@ class GameEnvironment:
         if not consensus["complete"]:
             return False, "Not all players have voted."
 
-        announcement = state[
-            "announcement"
-        ]
+        # ----------------------------------------------------------------
+        # INCONCLUSIVE: no strict majority for a real classification.
+        # Clear the ballot and drop back into investigation so players
+        # can gather more evidence and call another vote.
+        # ----------------------------------------------------------------
 
-        correct_classification = (
-            announcement["classification"]
-        )
+        if not consensus["resolved"]:
 
-        # A round is a successful investigation if a majority voted
-        # to FLAG the announcement.
+            state["votes"] = {}
 
-        successful = (
-            consensus["majority"]
-        )
+            state["phase"] = "investigation"
+
+            self.save_state(state)
+
+            return True, {
+                "inconclusive": True,
+                "tally": consensus["tally"],
+            }
+
+        # ----------------------------------------------------------------
+        # RESOLVED: verdict is one of the four real classifications, so
+        # scoring is a direct match against the announcement's truth.
+        # ----------------------------------------------------------------
+
+        announcement = state["announcement"]
+
+        correct_classification = announcement["classification"]
+
+        verdict = consensus["verdict"]
+
+        successful = verdict == correct_classification
 
         result = {
             "round": state["round"],
 
             "successful": successful,
 
-            "classification":
-                correct_classification,
+            "verdict": verdict,
 
-            "explanation":
-                announcement["explanation"],
+            "classification": correct_classification,
 
-            "votes":
-                state["votes"],
+            "explanation": announcement["explanation"],
+
+            "votes": state["votes"],
+
+            "tally": consensus["tally"],
         }
 
-        state["round_results"].append(
-            result
-        )
-
-        # --------------------------------------------------------------
-        # Score investigators
-        # --------------------------------------------------------------
+        state["round_results"].append(result)
 
         if successful:
 
-            for player_id, player in (
-                state["players"].items()
-            ):
+            for player_id, player in state["players"].items():
 
                 if player["role"] != "Imposter":
 
                     player["score"] += 1
 
-                    state["scores"][
-                        player_id
-                    ] += 1
+                    state["scores"][player_id] += 1
 
         state["phase"] = "result"
 
         self.save_state(state)
 
-        return True, result
+        investigator_score, required_score = (
+            self.get_score_snapshot()
+        )
+
+        result["investigator_score"] = investigator_score
+
+        result["required_score"] = required_score
+
+        return True, {
+            "inconclusive": False,
+            "result": result,
+        }
 
 
     # ==================================================================
