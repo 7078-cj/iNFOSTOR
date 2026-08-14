@@ -1,86 +1,197 @@
-import React, { useContext } from 'react'
-import { useNavigate } from 'react-router-dom';
-import AuthContext from '../context/AuthContext';
+import { useContext, useState } from "react";
+import { AlertCircle, AtSign, KeyRound, User } from "lucide-react";
 
+import AuthContext from "../context/AuthContext";
+import AuthLayout, { AuthLink } from "../components/auth/AuthLayout";
+import { Button, Input } from "../components/ui";
 
-function Register() {
-    const nav = useNavigate()
-    let {loginUser} = useContext(AuthContext)
+/*
+|--------------------------------------------------------------------------
+| Register
+|--------------------------------------------------------------------------
+| Same registration request as before — POST to register/, then hand the
+| event to loginUser() on success. The rewrite is presentational plus real
+| validation and error reporting; the previous version parsed the response
+| but only acted on status 200 and silently dropped every failure.
+*/
 
-    var RegisterUser = async(e) =>{
-        e.preventDefault();
-        const url = import.meta.env.VITE_API_URL
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-        let response = await fetch(
-          `${url}register/`,{
-            method: "POST",
-            headers:{
-              'Content-Type' : 'application/json',
-            },
-            body :JSON.stringify({
-                                  'username' :e.target.username.value,
-                                    'email':e.target.email.value,
-                                  'password' :e.target.password.value,
-                                  
-                                  })
-          }
-        )
-        let data = await response.json()
-                
-                if (response.status ==200){
-                  loginUser(e)
-                  nav('/')
-      }
-    }
-  return (
-    <div className='flex flex-col justify-center items-center h-screen'>
-      <div className="w-full max-w-md bg-white shadow-md rounded-lg p-8">
-      <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Register</h2>
-        <form onSubmit={RegisterUser} className="flex flex-col space-y-4">
-          <label className="flex flex-col text-gray-700 font-medium">
-                Username
-                <input
-                  type="text"
-                  name="username"
-                  className="mt-1 px-3 py-2 border-2 border-gray-300 rounded-md outline-none focus:border-green-500 text-gray-700"
+export default function Register() {
+    const { loginUser } = useContext(AuthContext);
+
+    const [values, setValues] = useState({
+        username: "",
+        email: "",
+        password: "",
+    });
+
+    const [touched, setTouched] = useState({});
+    const [submitting, setSubmitting] = useState(false);
+    const [formError, setFormError] = useState(null);
+
+    const errors = {
+        username:
+            values.username.trim().length >= 3
+                ? null
+                : "At least 3 characters.",
+        email: EMAIL_PATTERN.test(values.email)
+            ? null
+            : "Enter a valid email address.",
+        password:
+            values.password.length >= 8
+                ? null
+                : "At least 8 characters.",
+    };
+
+    const isValid = !errors.username && !errors.email && !errors.password;
+
+    const handleChange = (field) => (event) => {
+        setValues((prev) => ({ ...prev, [field]: event.target.value }));
+        setFormError(null);
+    };
+
+    const handleBlur = (field) => () => {
+        setTouched((prev) => ({ ...prev, [field]: true }));
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+
+        setTouched({ username: true, email: true, password: true });
+
+        if (!isValid) {
+            return;
+        }
+
+        setSubmitting(true);
+        setFormError(null);
+
+        const url = import.meta.env.VITE_API_URL;
+
+        try {
+            const response = await fetch(`${url}register/`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: values.username.trim(),
+                    email: values.email.trim(),
+                    password: values.password,
+                }),
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                // DRF returns field errors as arrays; surface the first one
+                // rather than dropping it the way the old version did.
+                const firstFieldError =
+                    data &&
+                    Object.values(data)
+                        .flat()
+                        .find((entry) => typeof entry === "string");
+
+                setFormError(
+                    firstFieldError ||
+                        "Could not create that account. Try different details."
+                );
+                setSubmitting(false);
+                return;
+            }
+
+            await loginUser(event);
+        } catch (error) {
+            console.error("Error during registration:", error);
+            setFormError(
+                "Could not reach the server. Check your connection and try again."
+            );
+        }
+
+        setSubmitting(false);
+    };
+
+    return (
+        <AuthLayout
+            eyebrow="Verification Desk"
+            title="Request desk access"
+            intro="New investigators get a credential and a role. You won't know which role until the first case lands."
+            footer={
+                <>
+                    Already cleared? <AuthLink to="/login">Sign in</AuthLink>
+                </>
+            }
+        >
+            <form
+                onSubmit={handleSubmit}
+                noValidate
+                className="flex flex-col gap-1"
+            >
+                <Input
+                    label="Username"
+                    name="username"
+                    type="text"
+                    autoComplete="username"
+                    icon={User}
+                    placeholder="how the team sees you"
+                    value={values.username}
+                    onChange={handleChange("username")}
+                    onBlur={handleBlur("username")}
+                    error={touched.username ? errors.username : null}
+                    valid={touched.username && !errors.username}
+                    disabled={submitting}
                 />
-              </label>
-          
-          <label className="flex flex-col text-gray-700 font-medium">
-                Email
-                <input
-                  type="text"
-                  name="email"
-                  className="mt-1 px-3 py-2 border-2 border-gray-300 rounded-md outline-none focus:border-green-500 text-gray-700"
+
+                <Input
+                    label="Email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    icon={AtSign}
+                    placeholder="you@example.com"
+                    value={values.email}
+                    onChange={handleChange("email")}
+                    onBlur={handleBlur("email")}
+                    error={touched.email ? errors.email : null}
+                    valid={touched.email && !errors.email}
+                    disabled={submitting}
                 />
-              </label>
-          
-          <label className="flex flex-col text-gray-700 font-medium">
-                Password
-                <input
-                  type="password"
-                  name="password"
-                  className="mt-1 px-3 py-2 border-2 border-gray-300 rounded-md outline-none focus:border-green-500 text-gray-700"
+
+                <Input
+                    label="Password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    icon={KeyRound}
+                    placeholder="at least 8 characters"
+                    hint="Minimum 8 characters."
+                    value={values.password}
+                    onChange={handleChange("password")}
+                    onBlur={handleBlur("password")}
+                    error={touched.password ? errors.password : null}
+                    valid={touched.password && !errors.password}
+                    disabled={submitting}
                 />
-              </label>
-          <button
-                type="submit"
-                className="w-full py-2 bg-green-500 hover:bg-green-600 active:bg-green-700 rounded-md text-white font-semibold transition"
-              >
-                Register
-              </button>
-      </form>
-     <p className="mt-4 text-center text-gray-600 text-sm">
-            Already have an account?{' '}
-            <a href="/register" className="text-cyan-500 hover:underline">
-              Login
-            </a>
-          </p>
-      </div>
-  
-        
-      </div>
-  )
+
+                {formError && (
+                    <div
+                        role="alert"
+                        className="animate-phase-in mb-3 flex items-start gap-2 rounded-md border border-status-danger/30 bg-status-danger/10 px-3 py-2.5 text-2xs text-status-danger"
+                    >
+                        <AlertCircle size={14} className="mt-px shrink-0" />
+                        <span>{formError}</span>
+                    </div>
+                )}
+
+                <Button
+                    type="submit"
+                    size="lg"
+                    fullWidth
+                    loading={submitting}
+                    disabled={submitting}
+                >
+                    {submitting ? "Issuing credential" : "Create credential"}
+                </Button>
+            </form>
+        </AuthLayout>
+    );
 }
-
-export default Register
