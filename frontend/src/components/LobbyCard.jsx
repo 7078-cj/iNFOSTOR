@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import PlayerAppearancePicker from "./PlayerAppearancePicker";
+import {
+    getStoredPlayerColor,
+    storePlayerColor,
+} from "../data/playerAppearance";
+
 
 const API_URL =
     import.meta.env.VITE_API_URL ||
@@ -20,6 +26,13 @@ export default function LobbyCard({
 
     const [error, setError] =
         useState(null);
+
+    const [showJoinPanel, setShowJoinPanel] =
+        useState(false);
+
+    const [selectedColor, setSelectedColor] = useState(
+        getStoredPlayerColor
+    );
 
 
     /*
@@ -67,11 +80,8 @@ export default function LobbyCard({
     */
 
     const handleJoin = () => {
-
-        navigate(
-            `/game/${lobby.id}`
-        );
-
+        storePlayerColor(selectedColor);
+        navigate(`/game/${lobby.id}`);
     };
 
 
@@ -191,31 +201,57 @@ export default function LobbyCard({
             )}
 
 
-            {/* Actions */}
+            {/* Join / appearance */}
 
-            <div className="flex gap-2">
+            {showJoinPanel ? (
+                <div className="space-y-4">
+                    <PlayerAppearancePicker
+                        value={selectedColor}
+                        onChange={setSelectedColor}
+                        compact
+                        label="Pick your look"
+                    />
 
-                <button
-                    type="button"
-                    onClick={handleJoin}
-                    className="flex-1 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-slate-200"
-                >
-                    Join Lobby
-                </button>
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={handleJoin}
+                            className="flex-1 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-slate-200"
+                        >
+                            Enter Lobby
+                        </button>
 
+                        <button
+                            type="button"
+                            onClick={() => setShowJoinPanel(false)}
+                            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-400 transition hover:bg-white/5 hover:text-white"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowJoinPanel(true)}
+                        className="flex-1 rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-slate-200"
+                    >
+                        Join Lobby
+                    </button>
 
-                <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    {deleting
-                        ? "..."
-                        : "Delete"}
-                </button>
-
-            </div>
+                    <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {deleting
+                            ? "..."
+                            : "Delete"}
+                    </button>
+                </div>
+            )}
 
         </div>
     );

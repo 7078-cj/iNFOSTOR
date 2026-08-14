@@ -122,14 +122,23 @@ function handleLobbyMessage(
 
         case "player_update":
 
-            setPlayers((prev) =>
-                prev.map((player) =>
-                    String(player.user_id) ===
-                    String(data.player.user_id)
+            setPlayers((prev) => {
+                const incomingId = String(data.player.user_id);
+                const exists = prev.some(
+                    (player) =>
+                        String(player.user_id) === incomingId
+                );
+
+                if (!exists) {
+                    return [...prev, data.player];
+                }
+
+                return prev.map((player) =>
+                    String(player.user_id) === incomingId
                         ? data.player
                         : player
-                )
-            );
+                );
+            });
 
             break;
 
@@ -242,10 +251,15 @@ function handleLobbyMessage(
                         : prev.voteComplete,
                 score: data.investigator_score ?? prev.score,
                 requiredScore:
-                    data.required_score ?? prev.requiredScore,
+                    data.required_score !== undefined
+                        ? data.required_score
+                        : prev.requiredScore,
                 lastRoundResult:
                     data.last_round_result ?? null,
-                finalResult: data.final_result ?? null,
+                finalResult:
+                    data.final_result !== undefined
+                        ? data.final_result
+                        : null,
                 sabotagedObjects: normalizeSabotagedObjects(
                     data.sabotaged_objects
                 ),
@@ -409,6 +423,35 @@ function handleLobbyMessage(
                 status: "finished",
                 phase: "finished",
                 finalResult: data.result,
+            }));
+
+            break;
+
+
+        case "lobby_reset":
+
+            setGameState((prev) => ({
+                ...prev,
+                status: "waiting",
+                phase: "waiting",
+                round: 0,
+                announcement: null,
+                role: null,
+                challenge: null,
+                votes: {},
+                myVote: null,
+                votesCast: 0,
+                voteComplete: false,
+                evidenceLog: [],
+                lastRoundResult: null,
+                lastRoundNote: null,
+                finalResult: null,
+                score: 0,
+                requiredScore: null,
+                sabotagedObjects: {},
+                discussionEndsAt: null,
+                sabotageCooldown: 0,
+                error: null,
             }));
 
             break;

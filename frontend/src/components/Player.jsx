@@ -16,6 +16,7 @@ export default function Player({
     onPositionChange,
     facing = Math.PI / 2,
     restoredPosition = null,
+    appearance = null,
     asset = null,
     assetClassName = "",
 }) {
@@ -217,9 +218,18 @@ export default function Player({
                 />
             ) : (
                 <>
-                    <div className="h-full w-full rounded-md bg-emerald-400 shadow-[0_0_12px_3px_rgba(94,230,168,0.5)]" />
                     <div
-                        className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-200"
+                        className={`h-full w-full rounded-md ${
+                            appearance?.bodyClass || "bg-emerald-400"
+                        } ${
+                            appearance?.glowClass ||
+                            "shadow-[0_0_12px_3px_rgba(94,230,168,0.5)]"
+                        }`}
+                    />
+                    <div
+                        className={`absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                            appearance?.dotClass || "bg-emerald-200"
+                        }`}
                         style={{
                             transform: `translate(-50%, -50%) rotate(${facing}rad) translateY(-14px)`,
                         }}

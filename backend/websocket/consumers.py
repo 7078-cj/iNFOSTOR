@@ -169,6 +169,29 @@ class MyWebSocketConsumer(
         })
 
         # --------------------------------------------------------------
+        # Reconnecting clients rebuild otherPlayers from scratch, but
+        # only brand-new joins receive the "players" snapshot inside
+        # handle_player_update(). Replay everyone else here so a page
+        # refresh doesn't leave the map empty of other players.
+        # --------------------------------------------------------------
+
+        if already_seated:
+
+            existing_players = [
+                player
+                for player_id, player
+                in players.items()
+                if player_id != self.player_id
+            ]
+
+            await self.send_json({
+                "type": "players",
+                "players": existing_players,
+                "player_count": len(players),
+                "max_players": MAX_PLAYERS,
+            })
+
+        # --------------------------------------------------------------
         # RESUME: if a game is already in progress and this player has
         # a seat (e.g. they reloaded the page), replay everything they
         # need to rebuild their UI — role, challenge, phase, votes,
@@ -251,6 +274,10 @@ class MyWebSocketConsumer(
 
             await self.handle_start_game()
 
+        elif action == "reset_lobby":
+
+            await self.handle_reset_lobby()
+
         # --------------------------------------------------------------
         # EVIDENCE
         # --------------------------------------------------------------
@@ -311,6 +338,8 @@ class MyWebSocketConsumer(
             "location"
         )
 
+        color = data.get("color")
+
         if not name:
             return
 
@@ -329,6 +358,8 @@ class MyWebSocketConsumer(
 
         players = await self.get_players()
 
+        existing = players.get(self.player_id, {})
+
         player = {
             "id": self.player_id,
 
@@ -336,6 +367,8 @@ class MyWebSocketConsumer(
                 self.user.id,
 
             "name": name,
+
+            "color": color or existing.get("color", "emerald"),
 
             "location": {
                 "x": x,
@@ -442,6 +475,18 @@ class MyWebSocketConsumer(
 
     async def handle_start_game(self):
 
+        lobby_players = await self.get_players()
+
+        state = await sync_to_async(
+            self.game.get_state
+        )()
+
+        was_finished = state["status"] == "finished"
+
+        await sync_to_async(
+            self.game.sync_lobby_players
+        )(lobby_players)
+
         success, result = await sync_to_async(
             self.game.start_game
         )()
@@ -455,13 +500,47 @@ class MyWebSocketConsumer(
 
             return
 
-        # Send game state to EVERYONE
+        if was_finished:
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "lobby_reset",
+                }
+            )
 
         await self.channel_layer.group_send(
             self.group_name,
             {
                 "type": "game_started",
                 "game": result,
+            }
+        )
+
+
+    async def handle_reset_lobby(self):
+
+        state = await sync_to_async(
+            self.game.get_state
+        )()
+
+        if state["status"] != "finished":
+
+            await self.send_json({
+                "type": "game_error",
+                "message": "The game is still in progress.",
+            })
+
+            return
+
+        await sync_to_async(
+            self.game.reset_for_new_game
+        )(state)
+
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "lobby_reset",
             }
         )
 
@@ -1039,6 +1118,16 @@ class MyWebSocketConsumer(
 
             "result":
                 result,
+        })
+
+
+    async def lobby_reset(
+        self,
+        event
+    ):
+
+        await self.send_json({
+            "type": "lobby_reset",
         })
 
 

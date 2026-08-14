@@ -4,6 +4,7 @@ import {
     useMemo,
     useContext,
     useEffect,
+    useRef,
 } from "react";
 import { useParams } from "react-router-dom";
 
@@ -26,6 +27,7 @@ import FabricateEvidenceModal from "../components/FabricateEvidenceModal";
 import Minimap from "../components/Minimap";
 import Npc from "../components/Npc";
 import NpcDialogueModal from "../components/NpcDialogueModal";
+import PlayerAppearancePicker from "../components/PlayerAppearancePicker";
 
 import {
     getVisionConfig,
@@ -35,6 +37,12 @@ import {
 import useWindowSize from "../hooks/useWindowSize";
 import lobbyListener from "../listener/lobbyListener";
 import AuthContext from "../context/AuthContext";
+
+import {
+    getStoredPlayerColor,
+    storePlayerColor,
+    getPlayerColor,
+} from "../data/playerAppearance";
 
 
 import {
@@ -168,6 +176,13 @@ export default function GameBoard() {
 
     const [restoredPosition, setRestoredPosition] = useState(null);
 
+    const [playerColor, setPlayerColor] = useState(getStoredPlayerColor);
+
+    const localAppearance = useMemo(
+        () => getPlayerColor(playerColor),
+        [playerColor]
+    );
+
 
     const [message, setMessage] = useState(null);
 
@@ -248,6 +263,40 @@ export default function GameBoard() {
         handleRestorePosition
     );
 
+    const hasJoinedRef = useRef(false);
+
+    useEffect(() => {
+        if (!connected) {
+            hasJoinedRef.current = false;
+        }
+    }, [connected]);
+
+    useEffect(() => {
+        if (!userId || !connected || hasJoinedRef.current) {
+            return;
+        }
+
+        hasJoinedRef.current = true;
+
+        sendMessage({
+            action: "player_update",
+            name: playerName,
+            color: playerColor,
+            location: {
+                x: playerRect.x,
+                y: playerRect.y,
+            },
+        });
+    }, [
+        userId,
+        connected,
+        sendMessage,
+        playerName,
+        playerColor,
+        playerRect.x,
+        playerRect.y,
+    ]);
+
     useEffect(() => {
         if (!restoredPosition || !userId || !connected) {
             return;
@@ -256,6 +305,7 @@ export default function GameBoard() {
         sendMessage({
             action: "player_update",
             name: playerName,
+            color: playerColor,
             location: {
                 x: restoredPosition.x,
                 y: restoredPosition.y,
@@ -267,6 +317,7 @@ export default function GameBoard() {
         connected,
         sendMessage,
         playerName,
+        playerColor,
     ]);
 
 
@@ -493,7 +544,7 @@ export default function GameBoard() {
             sendMessage({
                 action: "player_update",
                 name: playerName,
-
+                color: playerColor,
                 location: {
                     x: next.x,
                     y: next.y,
@@ -504,6 +555,7 @@ export default function GameBoard() {
             sendMessage,
             userId,
             playerName,
+            playerColor,
         ]
     );
 
@@ -534,6 +586,43 @@ export default function GameBoard() {
     const handleStartGame = useCallback(() => {
         sendMessage({ action: "start_game" });
     }, [sendMessage]);
+
+    const handlePlayAgain = useCallback(() => {
+        sendMessage({ action: "start_game" });
+    }, [sendMessage]);
+
+    const handleBackToLobby = useCallback(() => {
+        sendMessage({ action: "reset_lobby" });
+    }, [sendMessage]);
+
+    const handleColorChange = useCallback(
+        (colorId) => {
+            storePlayerColor(colorId);
+            setPlayerColor(colorId);
+
+            if (!userId || !connected) {
+                return;
+            }
+
+            sendMessage({
+                action: "player_update",
+                name: playerName,
+                color: colorId,
+                location: {
+                    x: playerRect.x,
+                    y: playerRect.y,
+                },
+            });
+        },
+        [
+            userId,
+            connected,
+            sendMessage,
+            playerName,
+            playerRect.x,
+            playerRect.y,
+        ]
+    );
 
     const handleCallVote = useCallback(() => {
         sendMessage({ action: "set_phase", phase: "consensus" });
@@ -733,6 +822,17 @@ export default function GameBoard() {
         gameState.phase === "consensus" &&
         !gameState.lastRoundResult;
 
+    const canStartGame =
+        gameState.status === "waiting";
+
+    const showWinnerOverlay =
+        gameState.status === "finished" &&
+        gameState.finalResult;
+
+    const showLobbySetup =
+        gameState.status === "waiting" &&
+        !showWinnerOverlay;
+
     const canCallVote =
         gameState.status === "playing" &&
         gameState.phase === "investigation" &&
@@ -853,13 +953,30 @@ export default function GameBoard() {
             )}
 
 
-            {gameState.status === "waiting" && (
+            {canStartGame && (
                 <button
                     onClick={handleStartGame}
                     className="absolute top-4 right-4 z-10 rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium uppercase tracking-wide hover:bg-emerald-600"
                 >
                     Start Game
                 </button>
+            )}
+
+
+            {showLobbySetup && (
+                <div className="absolute bottom-6 left-4 z-10 w-72 rounded-lg border border-white/10 bg-black/80 p-3 backdrop-blur-sm">
+                    <PlayerAppearancePicker
+                        value={playerColor}
+                        onChange={handleColorChange}
+                        compact
+                        label="Your appearance"
+                    />
+                    <p className="mt-2 text-[10px] text-slate-500">
+                        {lobbyInfo.playerCount} player
+                        {lobbyInfo.playerCount !== 1 ? "s" : ""} in
+                        lobby — need 2+ to start
+                    </p>
+                </div>
             )}
 
 
@@ -977,7 +1094,7 @@ export default function GameBoard() {
                 </div>
             )}
 
-            {gameState.finalResult && (
+            {showWinnerOverlay && (
                 <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/85">
                     <div className="max-w-sm rounded border border-white/10 bg-neutral-900 p-5 text-center text-sm text-slate-200">
                         <div className="mb-2 text-lg font-semibold">
@@ -999,6 +1116,34 @@ export default function GameBoard() {
                                     ]?.name || "unknown"}
                                 </p>
                             )}
+
+                        {gameState.error && (
+                            <p className="mt-3 rounded bg-red-500/10 px-2 py-1 text-xs text-red-400">
+                                {gameState.error}
+                            </p>
+                        )}
+
+                        <div className="mt-5 flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={handlePlayAgain}
+                                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium uppercase tracking-wide hover:bg-emerald-600"
+                            >
+                                Play Again
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBackToLobby}
+                                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/5"
+                            >
+                                Back to Lobby
+                            </button>
+                        </div>
+
+                        <p className="mt-3 text-[10px] text-slate-500">
+                            Need at least 2 players connected to start a
+                            rematch.
+                        </p>
                     </div>
                 </div>
             )}
@@ -1050,16 +1195,21 @@ export default function GameBoard() {
                     {/* Other Players */}
                     {/* ----------------------------------------------------- */}
 
-                    {visibleOtherPlayers.map((player) => (
+                    {visibleOtherPlayers.map((player) => {
+                        const appearance = getPlayerColor(
+                            player.color
+                        );
+
+                        return (
                             <OtherPlayer
                                 key={player.id}
                                 x={player.location.x}
                                 y={player.location.y}
                                 name={player.name}
-                                color="bg-amber-400"
+                                color={`${appearance.bodyClass} ${appearance.glowClass}`}
                             />
-                        ))
-                    }
+                        );
+                    })}
 
 
                     {/* ----------------------------------------------------- */}
@@ -1160,6 +1310,7 @@ export default function GameBoard() {
                             width: WORLD_W,
                             height: WORLD_H,
                         }}
+                        appearance={localAppearance}
                         onPositionChange={handlePositionChange}
                     />
 

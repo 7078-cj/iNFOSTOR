@@ -240,6 +240,9 @@ class GameEnvironment:
 
             existing["name"] = player["name"]
 
+            if player.get("color"):
+                existing["color"] = player["color"]
+
             existing["location"] = player.get(
                 "location",
                 existing.get(
@@ -266,6 +269,7 @@ class GameEnvironment:
                 player_id
             ),
             "name": player["name"],
+            "color": player.get("color", "emerald"),
             "location": player.get(
                 "location",
                 {
@@ -376,6 +380,11 @@ class GameEnvironment:
             # Keep player/role/score. Nothing to do.
             return state
 
+        if state["status"] == "finished" and not force:
+            # Finished game — treat disconnect like a reload so players
+            # can still hit Play Again without losing their lobby seat.
+            return state
+
         state["players"].pop(
             player_id,
             None
@@ -451,7 +460,33 @@ class GameEnvironment:
 
         player = state["players"].get(player_id)
 
-        if not player or state["status"] == "waiting":
+        if not player:
+            return None
+
+        # After a match ends, reconnecting should land in the lobby
+        # ready for a rematch — without mutating server state for others.
+        if state["status"] == "finished":
+            return {
+                "status": "waiting",
+                "phase": "waiting",
+                "round": 0,
+                "announcement": None,
+                "role": None,
+                "challenge": None,
+                "votes": {},
+                "votes_cast": 0,
+                "player_count": len(state["players"]),
+                "investigator_score": 0,
+                "required_score": None,
+                "last_round_result": None,
+                "final_result": None,
+                "sabotaged_objects": {},
+                "discussion_ends_at": None,
+                "location": player.get("location"),
+                "rematch_available": True,
+            }
+
+        if state["status"] == "waiting":
             return None
 
         votes = state["votes"]
@@ -513,9 +548,64 @@ class GameEnvironment:
     # START GAME
     # ==================================================================
 
+    def sync_lobby_players(self, lobby_players):
+        """
+        Merge the live lobby cache into game-environment seats so
+        start/rematch counts reflect who is actually connected.
+        """
+
+        if not isinstance(lobby_players, dict):
+            return self.get_state()
+
+        state = self.get_state()
+
+        if state["status"] == "playing":
+            return state
+
+        for player in lobby_players.values():
+            self.add_player(player)
+
+        return self.get_state()
+
+    def reset_for_new_game(self, state):
+        """
+        Clear a finished (or stale) game while keeping seated players so
+        the lobby can run another match without everyone rejoining.
+        """
+
+        players = state["players"]
+
+        for player in players.values():
+            player["role"] = None
+            player["score"] = 0
+
+        state["status"] = "waiting"
+        state["round"] = 0
+        state["phase"] = "waiting"
+        state["imposter_id"] = None
+        state["announcement"] = None
+        state["roles_assigned"] = False
+        state["challenges"] = {}
+        state["evidence"] = {}
+        state["votes"] = {}
+        state["ready_players"] = []
+        state["round_results"] = []
+        state["scores"] = {
+            player_id: 0 for player_id in players
+        }
+        state["sabotaged_objects"] = {}
+        state["discussion_ends_at"] = None
+
+        self.save_state(state)
+
+        return state
+
     def start_game(self):
 
         state = self.get_state()
+
+        if state["status"] == "finished":
+            state = self.reset_for_new_game(state)
 
         players = list(
             state["players"].values()
