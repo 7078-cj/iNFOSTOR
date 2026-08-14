@@ -1,1 +1,490 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   DESIGN TOKENS
+   --------------------------------------------------------------------------
+   Single source of truth for colour, type, radius, elevation and motion.
+   Everything in the app should pull from here rather than hand-picking
+   utility values, so a change lands in one place instead of thirty files.
+
+   Naming follows Tailwind v4's @theme convention, so each token below is
+   automatically available as a utility (--color-surface-raised becomes
+   bg-surface-raised / text-surface-raised / border-surface-raised, and so on).
+   ========================================================================== */
+
+@theme {
+    /* ----------------------------------------------------------------------
+       TYPEFACES
+
+       Mono carries the UI: this is an investigation console, and the
+       terminal texture is doing thematic work rather than decoration.
+       Serif is reserved for evidence surfaces — documents, bulletins and
+       newspaper clippings read as *paper* against the mono chrome.
+       Both are system stacks, so there is no webfont round-trip.
+       ---------------------------------------------------------------------- */
+
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code",
+        "Cascadia Code", Menlo, Consolas, monospace;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", sans-serif;
+
+    --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+        "Times New Roman", serif;
+
+    /* ----------------------------------------------------------------------
+       TYPE SCALE
+
+       Collapsed from the 14 sizes previously in use (including arbitrary
+       values down to 5px). Steps are deliberately tight at the small end,
+       where most of the HUD lives, and open up for headings.
+
+       NOTE: in-world sprite labels — the tiny text baked into map objects
+       and environment art — deliberately sit outside this scale. They are
+       illustration internals drawn at world coordinates, not UI chrome.
+       ---------------------------------------------------------------------- */
+
+    --text-2xs: 0.6875rem; /* 11px — dense HUD, counters, meta */
+    --text-2xs--line-height: 1rem;
+
+    --text-xs: 0.75rem; /* 12px — secondary UI, labels */
+    --text-xs--line-height: 1.125rem;
+
+    --text-sm: 0.8125rem; /* 13px — body default */
+    --text-sm--line-height: 1.25rem;
+
+    --text-base: 0.9375rem; /* 15px — emphasised body */
+    --text-base--line-height: 1.5rem;
+
+    --text-lg: 1.125rem; /* 18px — card titles */
+    --text-lg--line-height: 1.625rem;
+
+    --text-xl: 1.5rem; /* 24px — screen titles */
+    --text-xl--line-height: 1.875rem;
+
+    --text-2xl: 2rem; /* 32px — hero / results */
+    --text-2xl--line-height: 2.375rem;
+
+    --text-3xl: 2.75rem; /* 44px — landing hero only */
+    --text-3xl--line-height: 3rem;
+
+    /* ----------------------------------------------------------------------
+       SURFACES
+
+       A five-step elevation ramp from the world backdrop up to modals.
+       Cool and slightly blue so the warm verdict colours read as signal
+       against it.
+       ---------------------------------------------------------------------- */
+
+    --color-surface-world: #06080c; /* the map itself, furthest back */
+    --color-surface-base: #0a0d13; /* page background */
+    --color-surface-sunken: #0d1119; /* wells, inset scroll areas */
+    --color-surface-raised: #141924; /* cards, panels */
+    --color-surface-overlay: #1b2230; /* modals, popovers */
+
+    /* ----------------------------------------------------------------------
+       BORDERS
+       ---------------------------------------------------------------------- */
+
+    --color-border-subtle: rgb(255 255 255 / 0.06);
+    --color-border-default: rgb(255 255 255 / 0.11);
+    --color-border-strong: rgb(255 255 255 / 0.2);
+
+    /* ----------------------------------------------------------------------
+       TEXT
+       ---------------------------------------------------------------------- */
+
+    --color-text-primary: #e9edf5;
+    --color-text-secondary: #98a4b8;
+    --color-text-muted: #626f85;
+    --color-text-inverse: #0a0d13;
+
+    /* ----------------------------------------------------------------------
+       BRAND / INTERACTIVE
+
+       One accent for "this is actionable". Deliberately cyan-leaning so it
+       never collides with a verdict colour.
+       ---------------------------------------------------------------------- */
+
+    --color-accent: #38bdf8;
+    --color-accent-hover: #7dd3fc;
+    --color-accent-active: #0ea5e9;
+    --color-accent-muted: rgb(56 189 248 / 0.12);
+
+    /* ----------------------------------------------------------------------
+       VERDICT COLOURS  — RESERVED
+
+       These five map 1:1 onto VALID_VOTES in game_environment.py. They are
+       reserved: no other part of the UI may use these hues for decoration,
+       because a player scanning the screen should be able to read a colour
+       as a verdict without second-guessing it.
+       ---------------------------------------------------------------------- */
+
+    --color-verdict-true: #34d399;
+    --color-verdict-true-dim: rgb(52 211 153 / 0.14);
+
+    --color-verdict-misleading: #fbbf24;
+    --color-verdict-misleading-dim: rgb(251 191 36 / 0.14);
+
+    --color-verdict-false: #f87171;
+    --color-verdict-false-dim: rgb(248 113 113 / 0.14);
+
+    --color-verdict-context: #a78bfa;
+    --color-verdict-context-dim: rgb(167 139 250 / 0.14);
+
+    --color-verdict-continue: #94a3b8;
+    --color-verdict-continue-dim: rgb(148 163 184 / 0.14);
+
+    /* ----------------------------------------------------------------------
+       PHASE COLOURS
+
+       A cool-to-warm arc across the round: the signal arrives cold, heats up
+       as the group is forced to decide. Reveal is deliberately neutral
+       parchment — that screen belongs to the verdict colour, so the phase
+       chrome gets out of its way.
+       ---------------------------------------------------------------------- */
+
+    --color-phase-announcement: #22d3ee;
+    --color-phase-investigation: #38bdf8;
+    --color-phase-evidence: #2dd4bf;
+    --color-phase-discussion: #818cf8;
+    --color-phase-consensus: #f59e0b;
+    --color-phase-reveal: #e7e2d6;
+
+    /* ----------------------------------------------------------------------
+       ROLE COLOURS
+
+       One per investigator role, plus the imposter. Tuned to sit apart from
+       the verdict hues at a glance.
+       ---------------------------------------------------------------------- */
+
+    --color-role-detective: #60a5fa;
+    --color-role-researcher: #2dd4bf;
+    --color-role-source: #c084fc;
+    --color-role-image: #f472b6;
+    --color-role-data: #38bdf8;
+    --color-role-media: #fb923c;
+    --color-role-imposter: #ef4444;
+
+    /* ----------------------------------------------------------------------
+       STATUS
+       ---------------------------------------------------------------------- */
+
+    --color-status-success: #34d399;
+    --color-status-warning: #fbbf24;
+    --color-status-danger: #f87171;
+    --color-status-info: #38bdf8;
+    --color-status-offline: #64748b;
+
+    /* ----------------------------------------------------------------------
+       RADIUS
+
+       Collapsed from 13 variants to four plus `full`. The rule: controls
+       take md, cards take lg, modals take xl, pills/avatars take full.
+       ---------------------------------------------------------------------- */
+
+    --radius-sm: 0.25rem; /* 4px  — chips, tags, inline marks */
+    --radius-md: 0.5rem; /* 8px  — buttons, inputs, small controls */
+    --radius-lg: 0.75rem; /* 12px — cards, panels */
+    --radius-xl: 1rem; /* 16px — modals, sheets */
+
+    /* ----------------------------------------------------------------------
+       ELEVATION
+
+       Four steps, matched to the surface ramp. Replaces ~20 hand-tuned
+       one-off shadows. Glows are separate (below) because they signal
+       state, not height.
+       ---------------------------------------------------------------------- */
+
+    --shadow-e1: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-e2: 0 2px 8px rgb(0 0 0 / 0.35), 0 1px 2px rgb(0 0 0 / 0.2);
+    --shadow-e3: 0 8px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.25);
+    --shadow-e4: 0 20px 48px rgb(0 0 0 / 0.6), 0 4px 12px rgb(0 0 0 / 0.3);
+
+    --shadow-inset: inset 0 1px 3px rgb(0 0 0 / 0.4);
+
+    /* Glows carry meaning: focus, active phase, sabotage, imposter. */
+    --shadow-glow-accent: 0 0 16px rgb(56 189 248 / 0.35);
+    --shadow-glow-success: 0 0 16px rgb(52 211 153 / 0.35);
+    --shadow-glow-warning: 0 0 16px rgb(251 191 36 / 0.35);
+    --shadow-glow-danger: 0 0 16px rgb(248 113 113 / 0.35);
+
+    /* ----------------------------------------------------------------------
+       MOTION
+
+       Durations and easings are tokens so timing stays consistent and can be
+       tuned globally. Phase transitions are the slow ones — they mark a
+       change of chapter. Control feedback is fast enough to feel physical.
+       ---------------------------------------------------------------------- */
+
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    --duration-instant: 90ms; /* control press feedback */
+    --duration-fast: 160ms; /* hover, focus */
+    --duration-base: 240ms; /* card + modal entry */
+    --duration-slow: 420ms; /* phase chrome changes */
+    --duration-cinematic: 900ms; /* evidence + imposter reveal */
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        background-color: var(--color-surface-base);
+        color: var(--color-text-primary);
+        font-family: var(--font-mono);
+        font-size: var(--text-sm);
+        line-height: var(--text-sm--line-height);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* The game board owns the whole viewport and manages its own scrolling;
+       a rubber-band scroll on the document reads as a bug on touch devices. */
+    body:has([data-app-shell="game"]) {
+        overflow: hidden;
+        overscroll-behavior: none;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+
+    /* Respect a user's reduced-motion preference everywhere, including the
+       cinematic reveals — those are the most likely to cause discomfort. */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+}
+
+/* ==========================================================================
+   MOTION PRIMITIVES
+
+   Deliberately few. Each one exists to reinforce a specific game moment;
+   anything that is only decoration was left out.
+   ========================================================================== */
+
+@layer utilities {
+    /* Phase chrome swapping in — a chapter change, not a pop. */
+    @keyframes phase-in {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Evidence landing on the board: it arrives with weight. */
+    @keyframes evidence-drop {
+        0% {
+            opacity: 0;
+            transform: translateY(-14px) scale(0.97) rotate(-0.6deg);
+        }
+        70% {
+            opacity: 1;
+            transform: translateY(2px) scale(1.005) rotate(0.15deg);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1) rotate(0deg);
+        }
+    }
+
+    /* The imposter reveal: a slow, deliberate unmasking. */
+    @keyframes unmask {
+        0% {
+            opacity: 0;
+            transform: scale(1.12);
+            filter: blur(10px) saturate(0.4);
+        }
+        60% {
+            opacity: 1;
+            filter: blur(0) saturate(1.15);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+            filter: blur(0) saturate(1);
+        }
+    }
+
+    /* Consensus pressure — a heartbeat on the countdown, not a flash. */
+    @keyframes pulse-ring {
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgb(245 158 11 / 0.5);
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgb(245 158 11 / 0);
+        }
+    }
+
+    /* Indeterminate loading — used by button + card loading states. */
+    @keyframes shimmer {
+        from {
+            background-position: -200% 0;
+        }
+        to {
+            background-position: 200% 0;
+        }
+    }
+
+    @keyframes spin-slow {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Terminal acknowledging a keypress — a short CRT kick, not a bounce.
+       Short enough that it never delays the modal opening behind it. */
+    @keyframes terminal-hit {
+        0% {
+            transform: scale(1.05);
+            filter: brightness(1) drop-shadow(0 0 10px rgb(56 189 248 / 0.7));
+        }
+        18% {
+            transform: scale(1.16);
+            filter: brightness(2.1)
+                drop-shadow(0 0 22px rgb(125 211 252 / 0.95));
+        }
+        34% {
+            transform: scale(1.02) translateX(-1px);
+            filter: brightness(1.15) drop-shadow(0 0 14px rgb(56 189 248 / 0.6));
+        }
+        52% {
+            transform: scale(1.09) translateX(1px);
+            filter: brightness(1.6) drop-shadow(0 0 18px rgb(56 189 248 / 0.8));
+        }
+        100% {
+            transform: scale(1.05);
+            filter: brightness(1) drop-shadow(0 0 10px rgb(56 189 248 / 0.7));
+        }
+    }
+
+    /* Proximity ring on whichever object E would actually trigger. */
+    @keyframes scan-ring {
+        0% {
+            opacity: 0.55;
+            transform: scale(0.82);
+        }
+        70% {
+            opacity: 0;
+            transform: scale(1.25);
+        }
+        100% {
+            opacity: 0;
+            transform: scale(1.25);
+        }
+    }
+
+    /* Role card coming up like a file being decrypted line by line. */
+    @keyframes declassify {
+        0% {
+            opacity: 0;
+            clip-path: inset(0 0 100% 0);
+            filter: brightness(2.4) blur(3px);
+        }
+        55% {
+            opacity: 1;
+            clip-path: inset(0 0 0 0);
+            filter: brightness(1.5) blur(0);
+        }
+        70% {
+            filter: brightness(0.7);
+        }
+        82% {
+            filter: brightness(1.35);
+        }
+        100% {
+            opacity: 1;
+            clip-path: inset(0 0 0 0);
+            filter: brightness(1);
+        }
+    }
+
+    /* Cursor blink for terminal-style headings. */
+    @keyframes caret {
+        0%,
+        49% {
+            opacity: 1;
+        }
+        50%,
+        100% {
+            opacity: 0;
+        }
+    }
+
+    .animate-terminal-hit {
+        animation: terminal-hit 420ms var(--ease-out-quart) both;
+    }
+
+    .animate-scan-ring {
+        animation: scan-ring 1.6s var(--ease-out-quart) infinite;
+    }
+
+    .animate-declassify {
+        animation: declassify var(--duration-cinematic) var(--ease-out-quart)
+            both;
+    }
+
+    .animate-caret {
+        animation: caret 1.1s step-end infinite;
+    }
+
+    .animate-phase-in {
+        animation: phase-in var(--duration-slow) var(--ease-out-quart) both;
+    }
+
+    .animate-evidence-drop {
+        animation: evidence-drop var(--duration-cinematic) var(--ease-spring)
+            both;
+    }
+
+    .animate-unmask {
+        animation: unmask var(--duration-cinematic) var(--ease-out-quart) both;
+    }
+
+    .animate-pulse-ring {
+        animation: pulse-ring 1.8s var(--ease-in-out-quart) infinite;
+    }
+
+    .animate-spin-slow {
+        animation: spin-slow 1.1s linear infinite;
+    }
+
+    .animate-shimmer {
+        background-image: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgb(255 255 255 / 0.06) 50%,
+            transparent 100%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.4s linear infinite;
+    }
+
+    /* Staggered children, for evidence lists and role grids. */
+    .stagger > * {
+        animation-delay: calc(var(--stagger-step, 60ms) * var(--i, 0));
+    }
+}
